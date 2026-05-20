@@ -2,9 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SFEF Motors</title>
   <link rel="stylesheet" href="/css/styles.css">
+  <link rel="manifest" href="/manifest.json">
+  <!-- iOS PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SFEF Motors">
+  <meta name="theme-color" content="#000000">
 </head>
 <body>
 
@@ -81,8 +87,12 @@
     </div>
   </aside>
 
+  <!-- ── Mobile sidebar overlay ── -->
+  <div id="sidebar-overlay" onclick="App.closeSidebar()"></div>
+
   <!-- ── Top bar ── -->
   <header id="topbar">
+    <button id="hamburger" onclick="App.toggleSidebar()" aria-label="Menu">&#9776;</button>
     <div id="page-title">Dashboard</div>
     <div id="topbar-actions"></div>
     <div id="clock"></div>

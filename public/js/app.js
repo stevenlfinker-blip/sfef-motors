@@ -71,6 +71,15 @@ const App = {
     App.loadDashboard();
   },
 
+  toggleSidebar() {
+    const open = document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('sidebar-overlay').classList.toggle('visible', open);
+  },
+  closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('visible');
+  },
+
   navigate(section) {
     // Hide all sections
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -84,6 +93,7 @@ const App = {
     document.getElementById('page-title').textContent = SECTION_TITLES[section] || section;
 
     App.currentSection = section;
+    App.closeSidebar(); // always close sidebar after navigating on mobile
 
     // Load section data
     switch (section) {
@@ -269,7 +279,12 @@ const App = {
       `;
       document.getElementById('dashboard-content').innerHTML = html;
     } catch (err) {
-      document.getElementById('dashboard-content').innerHTML = `<div style="color:var(--red)">Failed to load dashboard: ${err.message}</div>`;
+      if (err.message === 'Session expired') return;
+      document.getElementById('dashboard-content').innerHTML = `
+        <div style="color:var(--red);padding:20px">
+          Failed to load dashboard: ${escHtml(err.message)}<br>
+          <button class="btn btn-secondary" style="margin-top:12px" onclick="App.loadDashboard()">Retry</button>
+        </div>`;
     }
   },
 
