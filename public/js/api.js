@@ -1,33 +1,30 @@
 const API = {
-  async get(url) {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(await r.text());
+  _handle(r) {
+    if (r.status === 401) { window.location = '/login'; return Promise.reject(new Error('Session expired')); }
+    if (!r.ok) return r.text().then(t => Promise.reject(new Error(t)));
     return r.json();
+  },
+  async get(url) {
+    return API._handle(await fetch(url));
   },
   async post(url, data) {
     const isForm = data instanceof FormData;
-    const r = await fetch(url, {
+    return API._handle(await fetch(url, {
       method: 'POST',
       headers: isForm ? {} : { 'Content-Type': 'application/json' },
       body: isForm ? data : JSON.stringify(data),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
+    }));
   },
   async put(url, data) {
     const isForm = data instanceof FormData;
-    const r = await fetch(url, {
+    return API._handle(await fetch(url, {
       method: 'PUT',
       headers: isForm ? {} : { 'Content-Type': 'application/json' },
       body: isForm ? data : JSON.stringify(data),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
+    }));
   },
   async del(url) {
-    const r = await fetch(url, { method: 'DELETE' });
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
+    return API._handle(await fetch(url, { method: 'DELETE' }));
   },
 };
 
