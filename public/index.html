@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SFEF Motors</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<div id="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-mark">SF</div>
+      <div>
+        <div class="sidebar-logo-text">SFEF MOTORS</div>
+        <div class="sidebar-logo-sub">FLEET MANAGEMENT</div>
+      </div>
+    </div>
+
+    <nav id="nav">
+      <div class="nav-section-label">Overview</div>
+      <div class="nav-item active" data-section="dashboard">
+        <span class="nav-icon">◈</span>
+        <span class="nav-label">Dashboard</span>
+      </div>
+
+      <div class="nav-section-label">Fleet</div>
+      <div class="nav-item" data-section="cars">
+        <span class="nav-icon">◉</span>
+        <span class="nav-label">Cars</span>
+        <span class="nav-badge" id="badge-cars">0</span>
+      </div>
+      <div class="nav-item" data-section="maintenance">
+        <span class="nav-icon">⚙</span>
+        <span class="nav-label">Maintenance</span>
+        <span class="nav-badge" id="badge-maintenance">0</span>
+      </div>
+
+      <div class="nav-section-label">Inventory</div>
+      <div class="nav-item" data-section="parts">
+        <span class="nav-icon">⊞</span>
+        <span class="nav-label">Parts</span>
+        <span class="nav-badge" id="badge-parts">0</span>
+      </div>
+      <div class="nav-item" data-section="tools">
+        <span class="nav-icon">⊕</span>
+        <span class="nav-label">Tools</span>
+        <span class="nav-badge" id="badge-tools">0</span>
+      </div>
+      <div class="nav-item" data-section="cleaning">
+        <span class="nav-icon">◎</span>
+        <span class="nav-label">Cleaning</span>
+        <span class="nav-badge" id="badge-cleaning">0</span>
+      </div>
+
+      <div class="nav-section-label">Finances & Events</div>
+      <div class="nav-item" data-section="costs">
+        <span class="nav-icon">$</span>
+        <span class="nav-label">Costs</span>
+      </div>
+      <div class="nav-item" data-section="events">
+        <span class="nav-icon">◷</span>
+        <span class="nav-label">Events</span>
+        <span class="nav-badge" id="badge-events">0</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn accent-btn" onclick="App.importData()">
+        <span>↑</span> Import Backup
+      </button>
+      <button class="sidebar-footer-btn" onclick="window.location='/api/export'">
+        <span>↓</span> Export Backup
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Top bar ── -->
+  <header id="topbar">
+    <div id="page-title">Dashboard</div>
+    <div id="topbar-actions"></div>
+    <div id="clock"></div>
+  </header>
+
+  <!-- ── Main content ── -->
+  <main id="content">
+
+    <!-- Dashboard -->
+    <section id="section-dashboard" class="section active">
+      <div id="dashboard-content"></div>
+    </section>
+
+    <!-- Cars -->
+    <section id="section-cars" class="section">
+      <div class="section-header">
+        <div class="section-title">Fleet <span>/ Cars</span></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="Cars.openAdd()">+ Add Car</button>
+        </div>
+      </div>
+      <div id="cars-grid" class="card-grid"></div>
+    </section>
+
+    <!-- Maintenance -->
+    <section id="section-maintenance" class="section">
+      <div class="section-header">
+        <div class="section-title">Fleet <span>/ Maintenance</span></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="Maintenance.openAdd()">+ Add Task</button>
+        </div>
+      </div>
+      <div class="filters-bar">
+        <select class="filter-select" id="maint-filter-car" onchange="Maintenance.render()">
+          <option value="">All Cars</option>
+        </select>
+        <select class="filter-select" id="maint-filter-status" onchange="Maintenance.render()">
+          <option value="">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="overdue">Overdue</option>
+          <option value="due-soon">Due Soon</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Car</th>
+              <th>Due Date</th>
+              <th>Due Mileage</th>
+              <th>Cost</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="maintenance-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Parts -->
+    <section id="section-parts" class="section">
+      <div class="section-header">
+        <div class="section-title">Inventory <span>/ Parts</span></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="Parts.openAdd()">+ Add Part</button>
+        </div>
+      </div>
+      <div class="filters-bar">
+        <select class="filter-select" id="parts-filter-car" onchange="Parts.render()">
+          <option value="">All Cars</option>
+        </select>
+        <input class="search-input" id="parts-search" placeholder="Search parts…" oninput="Parts.render()">
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Part Name</th>
+              <th>Part #</th>
+              <th>Car</th>
+              <th>Qty</th>
+              <th>Location</th>
+              <th>Cost Ea.</th>
+              <th>Supplier</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="parts-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Tools -->
+    <section id="section-tools" class="section">
+      <div class="section-header">
+        <div class="section-title">Inventory <span>/ Tools</span></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="Tools.openAdd()">+ Add Tool</button>
+        </div>
+      </div>
+      <div class="filters-bar">
+        <select class="filter-select" id="tools-filter-cat" onchange="Tools.render()">
+          <option value="">All Categories</option>
+        </select>
+        <input class="search-input" id="tools-search" placeholder="Search tools…" oninput="Tools.render()">
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>Brand</th>
+              <th>Category</th>
+              <th>Location</th>
+              <th>Condition</th>
+              <th>Notes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tools-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Cleaning -->
+    <section id="section-cleaning" class="section">
+      <div class="section-header">
+        <div class="section-title">Inventory <span>/ Cleaning</span></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="Cleaning.openAdd()">+ Add Product</button>
+        </div>
+      </div>
+      <div class="filters-bar">
+        <select class="filter-select" id="cleaning-filter-status" onchange="Cleaning.render()">
+          <option value="">All Status</option>
+          <option value="In Stock">In Stock</option>
+          <option value="Low">Low</option>
+          <option value="Out of Stock">Out of Stock</option>
+        </select>
+        <input class="search-input" id="cleaning-search" placeholder="Search products…" oninput="Cleaning.render()">
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Brand</th>
+              <th>Type</th>
+              <th>Qty</th>
+              <th>Unit</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="cleaning-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Costs -->
+    <section id="section-costs" class="section">
+      <div class="section-header">
+        <div class="section-title">Finances <span>/ Costs</span></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="Costs.openAdd()">+ Add Entry</button>
+        </div>
+      </div>
+      <div id="cost-summary-row"></div>
+      <div class="filters-bar">
+        <select class="filter-select" id="costs-filter-car" onchange="Costs.render()">
+          <option value="">All Cars</option>
+          <option value="0">General (No Car)</option>
+        </select>
+        <select class="filter-select" id="costs-filter-cat" onchange="Costs.render()">
+          <option value="">All Categories</option>
+        </select>
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Description</th>
+              <th>Car</th>
+              <th>Category</th>
+              <th>Amount</th>
+              <th>Receipt</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="costs-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Events -->
+    <section id="section-events" class="section">
+      <div class="section-header">
+        <div class="section-title">Schedule <span>/ Events</span></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="Events.openAdd()">+ Add Event</button>
+        </div>
+      </div>
+      <div class="filters-bar">
+        <select class="filter-select" id="events-filter-type" onchange="Events.render()">
+          <option value="">All Types</option>
+          <option value="Car Show">Car Show</option>
+          <option value="Track Day">Track Day</option>
+          <option value="Service">Service</option>
+          <option value="Rally">Rally</option>
+          <option value="Other">Other</option>
+        </select>
+        <select class="filter-select" id="events-filter-car" onchange="Events.render()">
+          <option value="">All Cars</option>
+        </select>
+      </div>
+      <div id="events-list"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ── Modal ── -->
+<div id="modal-overlay" class="hidden">
+  <div id="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title"></div>
+      <button class="btn-icon" onclick="Modal.hide()">✕</button>
+    </div>
+    <div id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer">
+      <button class="btn btn-secondary" onclick="Modal.hide()">Cancel</button>
+      <button class="btn btn-primary" id="modal-submit">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Import modal ── -->
+<div id="import-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
+  <div style="background:var(--card);border:1px solid var(--border-light);border-radius:6px;width:440px;max-width:95vw;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.6)">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px;">Import Backup</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">⚠ This will replace all existing data. Paste your JSON backup or upload the file.</div>
+    <div class="form-row">
+      <label>Upload JSON File</label>
+      <input type="file" id="import-file" accept=".json" onchange="App.handleImportFile(event)">
+    </div>
+    <div class="form-row">
+      <label>Or Paste JSON</label>
+      <textarea id="import-text" style="min-height:120px;font-family:monospace;font-size:11px;" placeholder='{"cars":[...],"tools":[...],...}'></textarea>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+      <button class="btn btn-secondary" onclick="document.getElementById('import-overlay').classList.add('hidden')">Cancel</button>
+      <button class="btn btn-primary" onclick="App.executeImport()">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast container ── -->
+<div id="toast-container"></div>
+
+<!-- ── Scripts ── -->
+<script src="/js/api.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/cars.js"></script>
+<script src="/js/maintenance.js"></script>
+<script src="/js/parts.js"></script>
+<script src="/js/tools.js"></script>
+<script src="/js/cleaning.js"></script>
+<script src="/js/costs.js"></script>
+<script src="/js/events.js"></script>
+
+</body>
+</html>
