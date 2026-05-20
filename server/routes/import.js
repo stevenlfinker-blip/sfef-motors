@@ -7,16 +7,16 @@ router.post('/import', (req, res) => {
 
   db.exec('BEGIN');
   try {
-    ['events', 'costs', 'cleaning', 'tools', 'parts', 'maintenance', 'cars'].forEach(t => {
-      db.prepare(`DELETE FROM ${t}`).run();
+    ['events', 'costs', 'cleaning', 'tools', 'parts', 'maintenance', 'watchlist', 'cars'].forEach(t => {
+      try { db.prepare(`DELETE FROM ${t}`).run(); } catch (_) {}
     });
     try {
-      db.prepare(`DELETE FROM sqlite_sequence WHERE name IN ('cars','maintenance','parts','tools','cleaning','costs','events')`).run();
+      db.prepare(`DELETE FROM sqlite_sequence WHERE name IN ('cars','maintenance','parts','tools','cleaning','costs','events','watchlist')`).run();
     } catch (_) {}
 
-    const insertCar = db.prepare('INSERT INTO cars (id, year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertCar = db.prepare('INSERT INTO cars (id, year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     for (const r of data.cars || []) {
-      insertCar.run(r.id, r.year, r.make, r.model, r.color || '', r.mileage || '', r.status || 'Active', r.notes || '', r.vin || '', r.ownership || '', r.registration || '', r.insurance || '');
+      insertCar.run(r.id, r.year, r.make, r.model, r.color || '', r.mileage || '', r.status || 'Active', r.notes || '', r.vin || '', r.ownership || '', r.registration || '', r.insurance || '', r.value || 0);
     }
 
     const insertMaint = db.prepare('INSERT INTO maintenance (id, car_id, title, description, due_date, due_mileage, completed, completed_date, cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -49,6 +49,11 @@ router.post('/import', (req, res) => {
       insertEvent.run(r.id, r.car_id || null, r.title, r.type || '', r.location || '', r.date || null, r.notes || '', r.registered || 0);
     }
 
+    const insertWatch = db.prepare('INSERT INTO watchlist (id, year, make, model, asking_price, source, priority, notes, added_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    for (const r of data.watchlist || []) {
+      insertWatch.run(r.id, r.year || '', r.make, r.model, r.asking_price || 0, r.source || '', r.priority || 'Medium', r.notes || '', r.added_date || '');
+    }
+
     db.exec('COMMIT');
 
     const counts = {
@@ -59,6 +64,7 @@ router.post('/import', (req, res) => {
       cleaning: (data.cleaning || []).length,
       costs: (data.costs || []).length,
       events: (data.events || []).length,
+      watchlist: (data.watchlist || []).length,
     };
     res.json({ success: true, counts });
   } catch (err) {
@@ -76,6 +82,7 @@ router.get('/export', (req, res) => {
     cleaning:    db.prepare('SELECT * FROM cleaning').all(),
     costs:       db.prepare('SELECT * FROM costs').all(),
     events:      db.prepare('SELECT * FROM events').all(),
+    watchlist:   db.prepare('SELECT * FROM watchlist').all(),
     exported_at: new Date().toISOString(),
   };
   const date = new Date().toISOString().split('T')[0];

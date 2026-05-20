@@ -96,11 +96,24 @@ db.exec(`
     registered INTEGER DEFAULT 0,
     FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL
   );
+
+  CREATE TABLE IF NOT EXISTS watchlist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year TEXT DEFAULT '',
+    make TEXT NOT NULL,
+    model TEXT NOT NULL,
+    asking_price REAL DEFAULT 0,
+    source TEXT DEFAULT '',
+    priority TEXT DEFAULT 'Medium',
+    notes TEXT DEFAULT '',
+    added_date TEXT DEFAULT ''
+  );
 `);
 
 // Migrations for existing databases
 ['ownership', 'registration', 'insurance'].forEach(col => {
   try { db.exec(`ALTER TABLE cars ADD COLUMN ${col} TEXT DEFAULT ''`); } catch (_) {}
 });
+try { db.exec(`ALTER TABLE cars ADD COLUMN value REAL DEFAULT 0`); } catch (_) {}
 
 module.exports = db;

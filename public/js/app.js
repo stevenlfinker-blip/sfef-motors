@@ -68,7 +68,7 @@ const App = {
     App.refreshBadges();
 
     // Load dashboard
-    App.loadDashboard();
+    Dashboard.load();
   },
 
   toggleSidebar() {
@@ -97,7 +97,7 @@ const App = {
 
     // Load section data
     switch (section) {
-      case 'dashboard':   App.loadDashboard(); break;
+      case 'dashboard':   Dashboard.load(); break;
       case 'cars':        Cars.load(); break;
       case 'maintenance': Maintenance.load(); break;
       case 'parts':       Parts.load(); break;
@@ -137,182 +137,8 @@ const App = {
     } catch (_) {}
   },
 
-  async loadDashboard() {
-    try {
-      const [cars, maint, parts, tools, cleaning, costs, events] = await Promise.all([
-        API.get('/api/cars'),
-        API.get('/api/maintenance'),
-        API.get('/api/parts'),
-        API.get('/api/tools'),
-        API.get('/api/cleaning'),
-        API.get('/api/costs'),
-        API.get('/api/events'),
-      ]);
-
-      const totalSpend = costs.reduce((sum, c) => sum + (c.amount || 0), 0);
-      const active = cars.filter(c => c.status === 'Active').length;
-      const restoration = cars.filter(c => c.status === 'Restoration').length;
-      const pending = maint.filter(m => !m.completed).length;
-      const upcomingEvents = events.filter(e => { const d = daysUntil(e.date); return d !== null && d >= 0; });
-      const lowSupplies = cleaning.filter(c => c.status === 'Low' || c.status === 'Out of Stock').length;
-
-      const html = `
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-label">Total Cars</div>
-            <div class="stat-value accent">${cars.length}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Active</div>
-            <div class="stat-value">${active}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Restoration</div>
-            <div class="stat-value">${restoration}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Pending Maint.</div>
-            <div class="stat-value">${pending}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Upcoming Events</div>
-            <div class="stat-value">${upcomingEvents.length}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Parts in Stock</div>
-            <div class="stat-value">${parts.length}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Tools</div>
-            <div class="stat-value">${tools.length}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Total Spend</div>
-            <div class="stat-value" style="font-size:18px">${fmt$(totalSpend)}</div>
-          </div>
-        </div>
-
-        <div class="dash-grid">
-          <div class="dash-panel">
-            <div class="dash-panel-header">
-              <span class="dash-panel-title">Fleet Status</span>
-            </div>
-            <div class="dash-panel-body">
-              ${cars.length === 0
-                ? '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No cars added yet.</div>'
-                : cars.map(c => `
-                <div class="dash-row">
-                  <div>
-                    <div class="dash-row-label">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</div>
-                    <div class="dash-row-meta">${escHtml(c.color)} · ${escHtml(c.mileage)} mi</div>
-                  </div>
-                  <div class="dash-row-right">
-                    ${App.carStatusBadge(c.status)}
-                  </div>
-                </div>`).join('')}
-            </div>
-          </div>
-
-          <div class="dash-panel">
-            <div class="dash-panel-header">
-              <span class="dash-panel-title">Upcoming Events</span>
-            </div>
-            <div class="dash-panel-body">
-              ${upcomingEvents.length === 0
-                ? '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No upcoming events.</div>'
-                : upcomingEvents.slice(0, 6).map(e => {
-                  const d = daysUntil(e.date);
-                  return `
-                  <div class="dash-row">
-                    <div>
-                      <div class="dash-row-label">${escHtml(e.title)}</div>
-                      <div class="dash-row-meta">${escHtml(e.location || e.type || '')} · ${fmtDate(e.date)}</div>
-                    </div>
-                    <div class="dash-row-right" style="color:${d <= 7 ? 'var(--orange)' : 'var(--text-muted)'};font-size:11px">
-                      ${d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `${d}d away`}
-                    </div>
-                  </div>`;
-                }).join('')}
-            </div>
-          </div>
-
-          <div class="dash-panel">
-            <div class="dash-panel-header">
-              <span class="dash-panel-title">Pending Maintenance</span>
-            </div>
-            <div class="dash-panel-body">
-              ${maint.filter(m => !m.completed).length === 0
-                ? '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">All clear — no pending tasks.</div>'
-                : maint.filter(m => !m.completed).slice(0, 6).map(m => {
-                  const d = daysUntil(m.due_date);
-                  const status = d === null ? 'upcoming' : d < 0 ? 'overdue' : d <= 14 ? 'due-soon' : 'upcoming';
-                  return `
-                  <div class="dash-row">
-                    <div>
-                      <div class="dash-row-label">${escHtml(m.title)}</div>
-                      <div class="dash-row-meta">${escHtml(m.car_name || 'General')} · ${fmtDate(m.due_date)}</div>
-                    </div>
-                    <div>${App.maintBadge(status)}</div>
-                  </div>`;
-                }).join('')}
-            </div>
-          </div>
-
-          <div class="dash-panel">
-            <div class="dash-panel-header">
-              <span class="dash-panel-title">Supplies Status</span>
-            </div>
-            <div class="dash-panel-body">
-              ${cleaning.length === 0
-                ? '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No supplies added yet.</div>'
-                : cleaning.map(c => `
-                <div class="dash-row">
-                  <div>
-                    <div class="dash-row-label">${escHtml(c.product)}</div>
-                    <div class="dash-row-meta">${escHtml(c.brand)} · ${escHtml(c.qty)} ${escHtml(c.unit)}</div>
-                  </div>
-                  <div>${App.cleaningBadge(c.status)}</div>
-                </div>`).join('')}
-            </div>
-          </div>
-        </div>
-      `;
-      document.getElementById('dashboard-content').innerHTML = html;
-    } catch (err) {
-      if (err.message === 'Session expired') return;
-      document.getElementById('dashboard-content').innerHTML = `
-        <div style="color:var(--red);padding:20px">
-          Failed to load dashboard: ${escHtml(err.message)}<br>
-          <button class="btn btn-secondary" style="margin-top:12px" onclick="App.loadDashboard()">Retry</button>
-        </div>`;
-    }
-  },
-
-  carStatusBadge(status) {
-    const map = {
-      'Active':      'badge-active',
-      'Restoration': 'badge-restoration',
-      'Storage':     'badge-storage',
-      'For Sale':    'badge-for-sale',
-    };
-    return `<span class="badge ${map[status] || 'badge-neutral'}">${escHtml(status)}</span>`;
-  },
-
-  maintBadge(status) {
-    const map = {
-      overdue:   'badge-overdue',
-      'due-soon': 'badge-due-soon',
-      upcoming:  'badge-upcoming',
-      completed: 'badge-completed',
-    };
-    const labels = { overdue: 'Overdue', 'due-soon': 'Due Soon', upcoming: 'Upcoming', completed: 'Done' };
-    return `<span class="badge ${map[status] || 'badge-neutral'}">${labels[status] || status}</span>`;
-  },
-
-  cleaningBadge(status) {
-    const map = { 'In Stock': 'badge-in-stock', 'Low': 'badge-low', 'Out of Stock': 'badge-out' };
-    return `<span class="badge ${map[status] || 'badge-neutral'}">${escHtml(status)}</span>`;
-  },
+  // Keep for compatibility
+  loadDashboard() { Dashboard.load(); },
 
   // Import helpers
   importData() {

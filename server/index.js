@@ -77,6 +77,7 @@ app.use('/api/tools', require('./routes/tools'));
 app.use('/api/cleaning', require('./routes/cleaning'));
 app.use('/api/costs', require('./routes/costs'));
 app.use('/api/events', require('./routes/events'));
+app.use('/api/watchlist', require('./routes/watchlist'));
 app.use('/api', require('./routes/import'));
 
 // ── Start ─────────────────────────────────────────

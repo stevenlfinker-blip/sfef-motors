@@ -160,6 +160,10 @@ const Cars = (() => {
         </div>
       </div>
       <div class="form-row">
+        <label>Estimated Value ($)</label>
+        <input type="number" id="f-value" value="${c.value || ''}" placeholder="0" min="0" step="100">
+      </div>
+      <div class="form-row">
         <label>Notes</label>
         <textarea id="f-notes">${escHtml(c.notes || '')}</textarea>
       </div>`;
@@ -177,6 +181,7 @@ const Cars = (() => {
       ownership:    document.getElementById('f-ownership').value,
       registration: document.getElementById('f-registration').value.trim(),
       insurance:    document.getElementById('f-insurance').value.trim(),
+      value:        parseFloat(document.getElementById('f-value').value) || 0,
       notes:        document.getElementById('f-notes').value.trim(),
     };
   }

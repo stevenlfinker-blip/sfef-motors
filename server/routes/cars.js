@@ -13,18 +13,18 @@ router.get('/:id', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance } = req.body;
+  const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value } = req.body;
   const result = db.prepare(
-    'INSERT INTO cars (year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(year, make, model, color || '', mileage || '', status || 'Active', notes || '', vin || '', ownership || '', registration || '', insurance || '');
+    'INSERT INTO cars (year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(year, make, model, color || '', mileage || '', status || 'Active', notes || '', vin || '', ownership || '', registration || '', insurance || '', value || 0);
   res.status(201).json(db.prepare('SELECT * FROM cars WHERE id = ?').get(result.lastInsertRowid));
 });
 
 router.put('/:id', (req, res) => {
-  const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance } = req.body;
+  const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value } = req.body;
   db.prepare(
-    'UPDATE cars SET year=?, make=?, model=?, color=?, mileage=?, status=?, notes=?, vin=?, ownership=?, registration=?, insurance=? WHERE id=?'
-  ).run(year, make, model, color, mileage, status, notes, vin, ownership || '', registration || '', insurance || '', req.params.id);
+    'UPDATE cars SET year=?, make=?, model=?, color=?, mileage=?, status=?, notes=?, vin=?, ownership=?, registration=?, insurance=?, value=? WHERE id=?'
+  ).run(year, make, model, color, mileage, status, notes, vin, ownership || '', registration || '', insurance || '', value || 0, req.params.id);
   res.json(db.prepare('SELECT * FROM cars WHERE id = ?').get(req.params.id));
 });
 
