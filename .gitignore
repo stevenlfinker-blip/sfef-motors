@@ -3,5 +3,6 @@ data/uploads/
 data/*.db
 data/*.db-wal
 data/*.db-shm
+data/sessions/
 .DS_Store
 .env

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const FileStore = require('session-file-store')(session);
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -21,13 +22,17 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false }));
 
 // ── Sessions ──────────────────────────────────────
+const sessionDir = path.join(__dirname, '..', 'data', 'sessions');
+fs.mkdirSync(sessionDir, { recursive: true });
+
 app.use(session({
+  store: new FileStore({ path: sessionDir, retries: 1, logFn: () => {} }),
   secret: process.env.SESSION_SECRET || 'sfef-motors-dev',
   resave: false,
   saveUninitialized: false,
   rolling: true,
   cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — stay logged in
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — survive restarts
     httpOnly: true,
   },
 }));
