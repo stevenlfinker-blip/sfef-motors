@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: sfef-motors
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: APP_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+    disk:
+      name: sfef-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
