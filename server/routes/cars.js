@@ -1,49 +1,36 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../db');
+const db = require('../db');
 
-router.get('/', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT * FROM cars ORDER BY id');
-    res.json(rows);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+router.get('/', (req, res) => {
+  res.json(db.prepare('SELECT * FROM cars ORDER BY id').all());
 });
 
-router.get('/:id', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT * FROM cars WHERE id = $1', [req.params.id]);
-    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+router.get('/:id', (req, res) => {
+  const car = db.prepare('SELECT * FROM cars WHERE id = ?').get(req.params.id);
+  if (!car) return res.status(404).json({ error: 'Not found' });
+  res.json(car);
 });
 
-router.post('/', async (req, res) => {
-  try {
-    const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value } = req.body;
-    const { rows } = await pool.query(
-      'INSERT INTO cars (year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',
-      [year, make, model, color||'', mileage||'', status||'Active', notes||'', vin||'', ownership||'', registration||'', insurance||'', value||0]
-    );
-    res.status(201).json(rows[0]);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+router.post('/', (req, res) => {
+  const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value } = req.body;
+  const result = db.prepare(
+    'INSERT INTO cars (year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(year, make, model, color||'', mileage||'', status||'Active', notes||'', vin||'', ownership||'', registration||'', insurance||'', value||0);
+  res.status(201).json(db.prepare('SELECT * FROM cars WHERE id = ?').get(result.lastInsertRowid));
 });
 
-router.put('/:id', async (req, res) => {
-  try {
-    const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value } = req.body;
-    const { rows } = await pool.query(
-      'UPDATE cars SET year=$1, make=$2, model=$3, color=$4, mileage=$5, status=$6, notes=$7, vin=$8, ownership=$9, registration=$10, insurance=$11, value=$12 WHERE id=$13 RETURNING *',
-      [year, make, model, color||'', mileage||'', status||'Active', notes||'', vin||'', ownership||'', registration||'', insurance||'', value||0, req.params.id]
-    );
-    res.json(rows[0]);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+router.put('/:id', (req, res) => {
+  const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value } = req.body;
+  db.prepare(
+    'UPDATE cars SET year=?, make=?, model=?, color=?, mileage=?, status=?, notes=?, vin=?, ownership=?, registration=?, insurance=?, value=? WHERE id=?'
+  ).run(year, make, model, color||'', mileage||'', status||'Active', notes||'', vin||'', ownership||'', registration||'', insurance||'', value||0, req.params.id);
+  res.json(db.prepare('SELECT * FROM cars WHERE id = ?').get(req.params.id));
 });
 
-router.delete('/:id', async (req, res) => {
-  try {
-    await pool.query('DELETE FROM cars WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+router.delete('/:id', (req, res) => {
+  db.prepare('DELETE FROM cars WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
 });
 
 module.exports = router;

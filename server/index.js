@@ -1,11 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
-const pgSession = require('connect-pg-simple')(session);
+const FileStore = require('session-file-store')(session);
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { pool, initDb } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,12 +22,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false }));
 
 // ── Sessions ──────────────────────────────────────
+const sessionDir = path.join(__dirname, '..', 'data', 'sessions');
+fs.mkdirSync(sessionDir, { recursive: true });
+
 app.use(session({
-  store: new pgSession({
-    pool,
-    tableName: 'session',
-    createTableIfMissing: true,
-  }),
+  store: new FileStore({ path: sessionDir, retries: 1, logFn: () => {} }),
   secret: process.env.SESSION_SECRET || 'sfef-motors-dev',
   resave: false,
   saveUninitialized: false,
@@ -82,22 +80,17 @@ app.use('/api/watchlist', require('./routes/watchlist'));
 app.use('/api', require('./routes/import'));
 
 // ── Start ─────────────────────────────────────────
-initDb().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n  SFEF MOTORS`);
-    console.log(`  -----------`);
-    console.log(`  Local:   http://localhost:${PORT}`);
-    const nets = os.networkInterfaces();
-    for (const name of Object.keys(nets)) {
-      for (const net of nets[name]) {
-        if (net.family === 'IPv4' && !net.internal) {
-          console.log(`  Network: http://${net.address}:${PORT}`);
-        }
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n  SFEF MOTORS`);
+  console.log(`  -----------`);
+  console.log(`  Local:   http://localhost:${PORT}`);
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        console.log(`  Network: http://${net.address}:${PORT}`);
       }
     }
-    console.log('');
-  });
-}).catch(err => {
-  console.error('Failed to connect to database:', err.message);
-  process.exit(1);
+  }
+  console.log('');
 });
