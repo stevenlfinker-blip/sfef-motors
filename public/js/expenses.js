@@ -56,7 +56,7 @@ const Expenses = (() => {
 
     const tbody = document.getElementById('expenses-tbody');
     if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">
         <div class="empty-state-icon">$</div>
         <div class="empty-state-title">No expenses</div>
         <div class="empty-state-sub">Track expenses, receipts, and invoices</div>
@@ -65,6 +65,7 @@ const Expenses = (() => {
     }
     tbody.innerHTML = items.map(c => `<tr>
       <td style="white-space:nowrap">${fmtDate(c.date)}</td>
+      <td>${escHtml(c.vendor || '—')}</td>
       <td><strong>${escHtml(c.description)}</strong>${c.notes ? `<br><span style="color:var(--text-muted);font-size:11px">${escHtml(c.notes)}</span>` : ''}</td>
       <td>${escHtml(c.car_name || '—')}</td>
       <td><span class="badge badge-neutral">${escHtml(c.category || '—')}</span></td>
@@ -84,9 +85,15 @@ const Expenses = (() => {
   function formHtml(c = {}) {
     const catOpts = CATEGORIES.map(k => `<option value="${k}" ${c.category === k ? 'selected':''}>${k}</option>`).join('');
     return `
-      <div class="form-row">
-        <label>Description *</label>
-        <input type="text" id="f-desc" value="${escHtml(c.description || '')}" placeholder="Oil change, Tire purchase…">
+      <div class="form-row-2">
+        <div class="form-row">
+          <label>Description *</label>
+          <input type="text" id="f-desc" value="${escHtml(c.description || '')}" placeholder="Oil change, Tire purchase…">
+        </div>
+        <div class="form-row">
+          <label>Vendor</label>
+          <input type="text" id="f-vendor" value="${escHtml(c.vendor || '')}" placeholder="Jiffy Lube, Amazon…">
+        </div>
       </div>
       <div class="form-row-2">
         <div class="form-row">
@@ -119,9 +126,10 @@ const Expenses = (() => {
       </div>`;
   }
 
-  function collectFormData(existingId) {
+  function collectFormData() {
     const fd = new FormData();
     fd.append('description', document.getElementById('f-desc').value.trim());
+    fd.append('vendor', document.getElementById('f-vendor').value.trim());
     fd.append('amount', document.getElementById('f-amount').value);
     fd.append('date', document.getElementById('f-date').value);
     fd.append('category', document.getElementById('f-category').value);
@@ -156,7 +164,7 @@ const Expenses = (() => {
       const amount = document.getElementById('f-amount').value;
       if (!desc || !amount) { Toast.show('Description and amount are required', 'error'); return; }
       try {
-        const updated = await API.put(`/api/expenses/${id}`, collectFormData(id));
+        const updated = await API.put(`/api/expenses/${id}`, collectFormData());
         const idx = _items.findIndex(i => i.id === id);
         _items[idx] = updated;
         renderSummary();
@@ -178,5 +186,34 @@ const Expenses = (() => {
     } catch (e) { Toast.show('Failed to delete', 'error'); }
   }
 
-  return { load, render, openAdd, openEdit, del };
+  function exportQB() {
+    if (_items.length === 0) { Toast.show('No expenses to export', 'error'); return; }
+
+    // QuickBooks Online compatible CSV
+    const headers = ['Date', 'Vendor', 'Description', 'Account', 'Amount', 'Class', 'Memo'];
+    const rows = _items.map(e => [
+      e.date ? fmtDate(e.date) : '',
+      e.vendor || '',
+      e.description || '',
+      e.category || '',
+      (e.amount || 0).toFixed(2),
+      e.car_name || '',
+      e.notes || '',
+    ]);
+
+    const csv = [headers, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `expenses-quickbooks-${today()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    Toast.show('QuickBooks CSV downloaded');
+  }
+
+  return { load, render, openAdd, openEdit, del, exportQB };
 })();

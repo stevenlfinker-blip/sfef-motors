@@ -12,6 +12,8 @@ db.exec('PRAGMA foreign_keys = ON');
 
 // One-time migration: rename costs → expenses
 try { db.exec('ALTER TABLE costs RENAME TO expenses'); } catch (e) { /* already done or doesn't exist */ }
+// One-time migration: add vendor column to expenses
+try { db.exec("ALTER TABLE expenses ADD COLUMN vendor TEXT DEFAULT ''"); } catch (e) { /* already exists */ }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS cars (
@@ -80,6 +82,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS expenses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     car_id INTEGER,
+    vendor TEXT DEFAULT '',
     category TEXT DEFAULT '',
     description TEXT NOT NULL,
     amount REAL NOT NULL DEFAULT 0,
