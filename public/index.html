@@ -266,6 +266,12 @@
       </div>
       <div id="expense-summary-row"></div>
       <div class="filters-bar">
+        <select class="filter-select" id="expenses-filter-type" onchange="Expenses.render()">
+          <option value="">All Types</option>
+          <option value="Operating">Garage Operating</option>
+          <option value="Maintenance">Vehicle Maintenance</option>
+          <option value="Restoration">Restoration</option>
+        </select>
         <select class="filter-select" id="expenses-filter-car" onchange="Expenses.render()">
           <option value="">All Cars</option>
           <option value="0">General (No Car)</option>
@@ -279,6 +285,7 @@
           <thead>
             <tr>
               <th>Date</th>
+              <th>Type</th>
               <th>Vendor</th>
               <th>Description</th>
               <th>Car</th>

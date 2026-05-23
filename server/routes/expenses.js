@@ -32,7 +32,7 @@ const upload = multer({
 });
 
 const SELECT = `
-  SELECT ex.id, ex.car_id, ex.vendor, ex.category, ex.description, ex.amount, ex.date, ex.receipt_path, ex.notes,
+  SELECT ex.id, ex.car_id, ex.expense_type, ex.vendor, ex.category, ex.description, ex.amount, ex.date, ex.receipt_path, ex.notes,
          c.year || ' ' || c.make || ' ' || c.model AS car_name
   FROM expenses ex LEFT JOIN cars c ON ex.car_id = c.id
 `;
@@ -42,16 +42,16 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', upload.single('receipt'), (req, res) => {
-  const { car_id, vendor, category, description, amount, date, notes } = req.body;
+  const { car_id, expense_type, vendor, category, description, amount, date, notes } = req.body;
   const receipt_path = req.file ? `/uploads/${req.file.filename}` : '';
   const result = db.prepare(
-    'INSERT INTO expenses (car_id, vendor, category, description, amount, date, receipt_path, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(car_id||null, vendor||'', category||'', description, parseFloat(amount)||0, date||null, receipt_path, notes||'');
+    'INSERT INTO expenses (car_id, expense_type, vendor, category, description, amount, date, receipt_path, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(car_id||null, expense_type||'', vendor||'', category||'', description, parseFloat(amount)||0, date||null, receipt_path, notes||'');
   res.status(201).json(db.prepare(SELECT + 'WHERE ex.id = ?').get(result.lastInsertRowid));
 });
 
 router.put('/:id', upload.single('receipt'), (req, res) => {
-  const { car_id, vendor, category, description, amount, date, notes } = req.body;
+  const { car_id, expense_type, vendor, category, description, amount, date, notes } = req.body;
   const existing = db.prepare('SELECT * FROM expenses WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
@@ -65,8 +65,8 @@ router.put('/:id', upload.single('receipt'), (req, res) => {
   }
 
   db.prepare(
-    'UPDATE expenses SET car_id=?, vendor=?, category=?, description=?, amount=?, date=?, receipt_path=?, notes=? WHERE id=?'
-  ).run(car_id||null, vendor||'', category||'', description, parseFloat(amount)||0, date||null, receipt_path, notes||'', req.params.id);
+    'UPDATE expenses SET car_id=?, expense_type=?, vendor=?, category=?, description=?, amount=?, date=?, receipt_path=?, notes=? WHERE id=?'
+  ).run(car_id||null, expense_type||'', vendor||'', category||'', description, parseFloat(amount)||0, date||null, receipt_path, notes||'', req.params.id);
   res.json(db.prepare(SELECT + 'WHERE ex.id = ?').get(req.params.id));
 });
 

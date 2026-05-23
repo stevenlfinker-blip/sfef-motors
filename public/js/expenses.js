@@ -1,7 +1,23 @@
 const Expenses = (() => {
   let _items = [];
   let _cars = [];
-  const CATEGORIES = ['Fuel', 'Maintenance', 'Parts', 'Tires', 'Insurance', 'Registration', 'Events', 'Storage', 'Detailing', 'Other'];
+
+  const TYPES = [
+    { value: 'Operating',    label: 'Garage Operating',    color: '#00d4ff' },
+    { value: 'Maintenance',  label: 'Vehicle Maintenance', color: '#f5a623' },
+    { value: 'Restoration',  label: 'Restoration',         color: '#c084fc' },
+  ];
+
+  const CATEGORIES = {
+    Operating:   ['Rent/Lease', 'Utilities', 'Insurance', 'Supplies', 'Tools', 'Security', 'Other'],
+    Maintenance: ['Fuel', 'Oil & Fluids', 'Tires', 'Brakes', 'Filters', 'Detailing', 'Registration', 'Inspection', 'Other'],
+    Restoration: ['Body Work', 'Paint', 'Engine', 'Transmission', 'Suspension', 'Interior', 'Electrical', 'Fabrication', 'Parts', 'Other'],
+  };
+  const ALL_CATEGORIES = [...new Set(Object.values(CATEGORIES).flat())];
+
+  function _typeInfo(val) {
+    return TYPES.find(t => t.value === val) || { label: val || '—', color: 'var(--text-muted)' };
+  }
 
   async function load() {
     try {
@@ -21,88 +37,114 @@ const Expenses = (() => {
     const catSel = document.getElementById('expenses-filter-cat');
     const curCat = catSel.value;
     catSel.innerHTML = '<option value="">All Categories</option>' +
-      CATEGORIES.map(c => `<option value="${c}" ${curCat === c ? 'selected':''}>${c}</option>`).join('');
+      ALL_CATEGORIES.map(c => `<option value="${c}" ${curCat === c ? 'selected':''}>${c}</option>`).join('');
   }
 
   function renderSummary() {
-    const total = _items.reduce((s, c) => s + (c.amount || 0), 0);
-    const byCategory = {};
-    for (const c of _items) {
-      byCategory[c.category || 'Other'] = (byCategory[c.category || 'Other'] || 0) + (c.amount || 0);
+    const total = _items.reduce((s, e) => s + (e.amount || 0), 0);
+    const byType = {};
+    for (const e of _items) {
+      const t = e.expense_type || 'Uncategorized';
+      byType[t] = (byType[t] || 0) + (e.amount || 0);
     }
-    const topCats = Object.entries(byCategory).sort((a,b) => b[1]-a[1]).slice(0, 5);
+
+    const typeCards = TYPES.map(t => {
+      const amt = byType[t.value] || 0;
+      const pct = total > 0 ? Math.round((amt / total) * 100) : 0;
+      return `
+        <div class="expense-cat-card" style="border-left:2px solid ${t.color}">
+          <div class="expense-cat-label">${t.label}</div>
+          <div class="expense-cat-value" style="color:${t.color}">${fmt$(amt)}</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${pct}% of total</div>
+        </div>`;
+    }).join('');
 
     document.getElementById('expense-summary-row').innerHTML = `
       <div class="expense-summary">
         <div class="expense-cat-card" style="border-left:2px solid var(--accent)">
           <div class="expense-cat-label">Total Spend</div>
           <div class="expense-cat-value" style="color:var(--accent)">${fmt$(total)}</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${_items.length} entries</div>
         </div>
-        ${topCats.map(([cat, amt]) => `
-        <div class="expense-cat-card">
-          <div class="expense-cat-label">${escHtml(cat)}</div>
-          <div class="expense-cat-value">${fmt$(amt)}</div>
-        </div>`).join('')}
+        ${typeCards}
       </div>`;
   }
 
   function render() {
-    const carFilter = document.getElementById('expenses-filter-car').value;
-    const catFilter = document.getElementById('expenses-filter-cat').value;
+    const typeFilter = document.getElementById('expenses-filter-type').value;
+    const carFilter  = document.getElementById('expenses-filter-car').value;
+    const catFilter  = document.getElementById('expenses-filter-cat').value;
     let items = _items;
-    if (carFilter === '0') items = items.filter(c => !c.car_id);
-    else if (carFilter) items = items.filter(c => String(c.car_id) === carFilter);
-    if (catFilter) items = items.filter(c => c.category === catFilter);
+    if (typeFilter) items = items.filter(e => e.expense_type === typeFilter);
+    if (carFilter === '0') items = items.filter(e => !e.car_id);
+    else if (carFilter) items = items.filter(e => String(e.car_id) === carFilter);
+    if (catFilter) items = items.filter(e => e.category === catFilter);
 
     const tbody = document.getElementById('expenses-tbody');
     if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">
         <div class="empty-state-icon">$</div>
         <div class="empty-state-title">No expenses</div>
         <div class="empty-state-sub">Track expenses, receipts, and invoices</div>
       </div></td></tr>`;
       return;
     }
-    tbody.innerHTML = items.map(c => `<tr>
-      <td style="white-space:nowrap">${fmtDate(c.date)}</td>
-      <td>${escHtml(c.vendor || '—')}</td>
-      <td><strong>${escHtml(c.description)}</strong>${c.notes ? `<br><span style="color:var(--text-muted);font-size:11px">${escHtml(c.notes)}</span>` : ''}</td>
-      <td>${escHtml(c.car_name || '—')}</td>
-      <td><span class="badge badge-neutral">${escHtml(c.category || '—')}</span></td>
-      <td style="font-weight:700;color:var(--accent)">${fmt$(c.amount)}</td>
-      <td>${c.receipt_path ? `<a href="${escHtml(c.receipt_path)}" target="_blank" class="receipt-link">View ↗</a>` : '—'}</td>
-      <td><div class="td-actions">
-        <button class="btn btn-ghost btn-sm" onclick="Expenses.openEdit(${c.id})">Edit</button>
-        <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="Expenses.del(${c.id})">✕</button>
-      </div></td>
-    </tr>`).join('');
+    tbody.innerHTML = items.map(e => {
+      const ti = _typeInfo(e.expense_type);
+      return `<tr>
+        <td style="white-space:nowrap">${fmtDate(e.date)}</td>
+        <td><span style="color:${ti.color};font-weight:600;font-size:11px">${escHtml(ti.label)}</span></td>
+        <td>${escHtml(e.vendor || '—')}</td>
+        <td><strong>${escHtml(e.description)}</strong>${e.notes ? `<br><span style="color:var(--text-muted);font-size:11px">${escHtml(e.notes)}</span>` : ''}</td>
+        <td>${escHtml(e.car_name || '—')}</td>
+        <td><span class="badge badge-neutral">${escHtml(e.category || '—')}</span></td>
+        <td style="font-weight:700;color:var(--accent)">${fmt$(e.amount)}</td>
+        <td>${e.receipt_path ? `<a href="${escHtml(e.receipt_path)}" target="_blank" class="receipt-link">View ↗</a>` : '—'}</td>
+        <td><div class="td-actions">
+          <button class="btn btn-ghost btn-sm" onclick="Expenses.openEdit(${e.id})">Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="Expenses.del(${e.id})">✕</button>
+        </div></td>
+      </tr>`;
+    }).join('');
   }
 
   function _carOpts(selectedId) {
     return _cars.map(c => `<option value="${c.id}" ${selectedId == c.id ? 'selected':''}>${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</option>`).join('');
   }
 
-  function formHtml(c = {}) {
-    const catOpts = CATEGORIES.map(k => `<option value="${k}" ${c.category === k ? 'selected':''}>${k}</option>`).join('');
+  function _catOpts(selectedType, selectedCat) {
+    const cats = CATEGORIES[selectedType] || ALL_CATEGORIES;
+    return cats.map(k => `<option value="${k}" ${selectedCat === k ? 'selected':''}>${k}</option>`).join('');
+  }
+
+  function formHtml(e = {}) {
+    const typeOpts = TYPES.map(t => `<option value="${t.value}" ${e.expense_type === t.value ? 'selected':''}>${t.label}</option>`).join('');
+    const catOpts  = _catOpts(e.expense_type, e.category);
     return `
+      <div class="form-row">
+        <label>Type *</label>
+        <select id="f-type" onchange="Expenses._onTypeChange(this.value)">
+          <option value="">— Select Type —</option>${typeOpts}
+        </select>
+      </div>
       <div class="form-row-2">
         <div class="form-row">
           <label>Description *</label>
-          <input type="text" id="f-desc" value="${escHtml(c.description || '')}" placeholder="Oil change, Tire purchase…">
+          <input type="text" id="f-desc" value="${escHtml(e.description || '')}" placeholder="Oil change, Brake service…">
         </div>
         <div class="form-row">
           <label>Vendor</label>
-          <input type="text" id="f-vendor" value="${escHtml(c.vendor || '')}" placeholder="Jiffy Lube, Amazon…">
+          <input type="text" id="f-vendor" value="${escHtml(e.vendor || '')}" placeholder="Jiffy Lube, Amazon…">
         </div>
       </div>
       <div class="form-row-2">
         <div class="form-row">
           <label>Amount ($) *</label>
-          <input type="number" id="f-amount" value="${c.amount || ''}" placeholder="0.00" step="0.01" min="0">
+          <input type="number" id="f-amount" value="${e.amount || ''}" placeholder="0.00" step="0.01" min="0">
         </div>
         <div class="form-row">
           <label>Date</label>
-          <input type="date" id="f-date" value="${c.date || today()}">
+          <input type="date" id="f-date" value="${e.date || today()}">
         </div>
       </div>
       <div class="form-row-2">
@@ -112,22 +154,31 @@ const Expenses = (() => {
         </div>
         <div class="form-row">
           <label>Car</label>
-          <select id="f-car"><option value="">— General —</option>${_carOpts(c.car_id)}</select>
+          <select id="f-car"><option value="">— General —</option>${_carOpts(e.car_id)}</select>
         </div>
       </div>
       <div class="form-row">
         <label>Receipt / Invoice</label>
         <input type="file" id="f-receipt" accept="image/*,.pdf">
-        ${c.receipt_path ? `<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">Current: <a href="${escHtml(c.receipt_path)}" target="_blank" class="receipt-link">View existing ↗</a></div>` : ''}
+        ${e.receipt_path ? `<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">Current: <a href="${escHtml(e.receipt_path)}" target="_blank" class="receipt-link">View existing ↗</a></div>` : ''}
       </div>
       <div class="form-row">
         <label>Notes</label>
-        <textarea id="f-notes">${escHtml(c.notes || '')}</textarea>
+        <textarea id="f-notes">${escHtml(e.notes || '')}</textarea>
       </div>`;
+  }
+
+  // Repopulate category dropdown when type changes
+  function _onTypeChange(typeVal) {
+    const catSel = document.getElementById('f-category');
+    if (!catSel) return;
+    const curCat = catSel.value;
+    catSel.innerHTML = '<option value="">— Select —</option>' + _catOpts(typeVal, curCat);
   }
 
   function collectFormData() {
     const fd = new FormData();
+    fd.append('expense_type', document.getElementById('f-type').value);
     fd.append('description', document.getElementById('f-desc').value.trim());
     fd.append('vendor', document.getElementById('f-vendor').value.trim());
     fd.append('amount', document.getElementById('f-amount').value);
@@ -142,8 +193,10 @@ const Expenses = (() => {
 
   function openAdd() {
     Modal.show('Add Expense', formHtml(), async () => {
-      const desc = document.getElementById('f-desc').value.trim();
+      const desc   = document.getElementById('f-desc').value.trim();
       const amount = document.getElementById('f-amount').value;
+      const type   = document.getElementById('f-type').value;
+      if (!type)   { Toast.show('Please select a type', 'error'); return; }
       if (!desc || !amount) { Toast.show('Description and amount are required', 'error'); return; }
       try {
         const item = await API.post('/api/expenses', collectFormData());
@@ -157,11 +210,13 @@ const Expenses = (() => {
   }
 
   function openEdit(id) {
-    const c = _items.find(i => i.id === id);
-    if (!c) return;
-    Modal.show('Edit Expense', formHtml(c), async () => {
-      const desc = document.getElementById('f-desc').value.trim();
+    const e = _items.find(i => i.id === id);
+    if (!e) return;
+    Modal.show('Edit Expense', formHtml(e), async () => {
+      const desc   = document.getElementById('f-desc').value.trim();
       const amount = document.getElementById('f-amount').value;
+      const type   = document.getElementById('f-type').value;
+      if (!type)   { Toast.show('Please select a type', 'error'); return; }
       if (!desc || !amount) { Toast.show('Description and amount are required', 'error'); return; }
       try {
         const updated = await API.put(`/api/expenses/${id}`, collectFormData());
@@ -189,31 +244,34 @@ const Expenses = (() => {
   function exportQB() {
     if (_items.length === 0) { Toast.show('No expenses to export', 'error'); return; }
 
-    // QuickBooks Online compatible CSV
-    const headers = ['Date', 'Vendor', 'Description', 'Account', 'Amount', 'Class', 'Memo'];
-    const rows = _items.map(e => [
-      e.date ? fmtDate(e.date) : '',
-      e.vendor || '',
-      e.description || '',
-      e.category || '',
-      (e.amount || 0).toFixed(2),
-      e.car_name || '',
-      e.notes || '',
-    ]);
+    const headers = ['Date', 'Type', 'Vendor', 'Description', 'Account', 'Amount', 'Class', 'Memo'];
+    const rows = _items.map(e => {
+      const ti = _typeInfo(e.expense_type);
+      return [
+        e.date ? fmtDate(e.date) : '',
+        ti.label,
+        e.vendor || '',
+        e.description || '',
+        e.category || '',
+        (e.amount || 0).toFixed(2),
+        e.car_name || '',
+        e.notes || '',
+      ];
+    });
 
     const csv = [headers, ...rows]
       .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
       .join('\r\n');
 
     const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
     a.download = `expenses-quickbooks-${today()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     Toast.show('QuickBooks CSV downloaded');
   }
 
-  return { load, render, openAdd, openEdit, del, exportQB };
+  return { load, render, openAdd, openEdit, del, exportQB, _onTypeChange };
 })();

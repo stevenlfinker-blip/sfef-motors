@@ -39,9 +39,9 @@ router.post('/import', (req, res) => {
       insertClean.run(r.id, r.product, r.brand||'', r.type||'', r.qty||0, r.unit||'', r.status||'In Stock');
     }
 
-    const insertExpense = db.prepare('INSERT INTO expenses (id, car_id, vendor, category, description, amount, date, receipt_path, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertExpense = db.prepare('INSERT INTO expenses (id, car_id, expense_type, vendor, category, description, amount, date, receipt_path, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     for (const r of (data.expenses || data.costs || [])) {
-      insertExpense.run(r.id, r.car_id||null, r.vendor||'', r.category||'', r.description||'', r.amount||0, r.date||null, r.receipt_path||'', r.notes||'');
+      insertExpense.run(r.id, r.car_id||null, r.expense_type||'', r.vendor||'', r.category||'', r.description||'', r.amount||0, r.date||null, r.receipt_path||'', r.notes||'');
     }
 
     const insertEvent = db.prepare('INSERT INTO events (id, car_id, title, type, location, date, notes, registered) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
