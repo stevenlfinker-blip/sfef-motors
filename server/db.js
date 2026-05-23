@@ -10,6 +10,9 @@ const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 
+// One-time migration: rename costs → expenses
+try { db.exec('ALTER TABLE costs RENAME TO expenses'); } catch (e) { /* already done or doesn't exist */ }
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS cars (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,7 +77,7 @@ db.exec(`
     status TEXT DEFAULT 'In Stock'
   );
 
-  CREATE TABLE IF NOT EXISTS costs (
+  CREATE TABLE IF NOT EXISTS expenses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     car_id INTEGER,
     category TEXT DEFAULT '',

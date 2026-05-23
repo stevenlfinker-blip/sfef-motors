@@ -7,11 +7,11 @@ router.post('/import', (req, res) => {
 
   db.exec('BEGIN');
   try {
-    ['watchlist', 'events', 'costs', 'cleaning', 'tools', 'parts', 'maintenance', 'cars'].forEach(t => {
+    ['watchlist', 'events', 'expenses', 'cleaning', 'tools', 'parts', 'maintenance', 'cars'].forEach(t => {
       try { db.prepare(`DELETE FROM ${t}`).run(); } catch (_) {}
     });
     try {
-      db.prepare(`DELETE FROM sqlite_sequence WHERE name IN ('cars','maintenance','parts','tools','cleaning','costs','events','watchlist')`).run();
+      db.prepare(`DELETE FROM sqlite_sequence WHERE name IN ('cars','maintenance','parts','tools','cleaning','expenses','events','watchlist')`).run();
     } catch (_) {}
 
     const insertCar = db.prepare('INSERT INTO cars (id, year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -39,9 +39,9 @@ router.post('/import', (req, res) => {
       insertClean.run(r.id, r.product, r.brand||'', r.type||'', r.qty||0, r.unit||'', r.status||'In Stock');
     }
 
-    const insertCost = db.prepare('INSERT INTO costs (id, car_id, category, description, amount, date, receipt_path, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    for (const r of data.costs || []) {
-      insertCost.run(r.id, r.car_id||null, r.category||'', r.description||'', r.amount||0, r.date||null, r.receipt_path||'', r.notes||'');
+    const insertExpense = db.prepare('INSERT INTO expenses (id, car_id, category, description, amount, date, receipt_path, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    for (const r of (data.expenses || data.costs || [])) {
+      insertExpense.run(r.id, r.car_id||null, r.category||'', r.description||'', r.amount||0, r.date||null, r.receipt_path||'', r.notes||'');
     }
 
     const insertEvent = db.prepare('INSERT INTO events (id, car_id, title, type, location, date, notes, registered) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
@@ -64,7 +64,7 @@ router.post('/import', (req, res) => {
         parts:       (data.parts       || []).length,
         tools:       (data.tools       || []).length,
         cleaning:    (data.cleaning    || []).length,
-        costs:       (data.costs       || []).length,
+        expenses:    (data.expenses || data.costs || []).length,
         events:      (data.events      || []).length,
         watchlist:   (data.watchlist   || []).length,
       },
@@ -82,7 +82,7 @@ router.get('/export', (req, res) => {
     parts:       db.prepare('SELECT * FROM parts').all(),
     tools:       db.prepare('SELECT * FROM tools').all(),
     cleaning:    db.prepare('SELECT * FROM cleaning').all(),
-    costs:       db.prepare('SELECT * FROM costs').all(),
+    expenses:    db.prepare('SELECT * FROM expenses').all(),
     events:      db.prepare('SELECT * FROM events').all(),
     watchlist:   db.prepare('SELECT * FROM watchlist').all(),
     exported_at: new Date().toISOString(),

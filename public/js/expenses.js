@@ -1,24 +1,24 @@
-const Costs = (() => {
+const Expenses = (() => {
   let _items = [];
   let _cars = [];
   const CATEGORIES = ['Fuel', 'Maintenance', 'Parts', 'Tires', 'Insurance', 'Registration', 'Events', 'Storage', 'Detailing', 'Other'];
 
   async function load() {
     try {
-      [_items, _cars] = await Promise.all([API.get('/api/costs'), API.get('/api/cars')]);
+      [_items, _cars] = await Promise.all([API.get('/api/expenses'), API.get('/api/cars')]);
       _populateFilters();
       renderSummary();
       render();
-    } catch (e) { Toast.show('Failed to load costs', 'error'); }
+    } catch (e) { Toast.show('Failed to load expenses', 'error'); }
   }
 
   function _populateFilters() {
-    const carSel = document.getElementById('costs-filter-car');
+    const carSel = document.getElementById('expenses-filter-car');
     const curCar = carSel.value;
     carSel.innerHTML = '<option value="">All Cars</option><option value="0">General (No Car)</option>' +
       _cars.map(c => `<option value="${c.id}" ${curCar == c.id ? 'selected':''}>${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</option>`).join('');
 
-    const catSel = document.getElementById('costs-filter-cat');
+    const catSel = document.getElementById('expenses-filter-cat');
     const curCat = catSel.value;
     catSel.innerHTML = '<option value="">All Categories</option>' +
       CATEGORIES.map(c => `<option value="${c}" ${curCat === c ? 'selected':''}>${c}</option>`).join('');
@@ -32,33 +32,33 @@ const Costs = (() => {
     }
     const topCats = Object.entries(byCategory).sort((a,b) => b[1]-a[1]).slice(0, 5);
 
-    document.getElementById('cost-summary-row').innerHTML = `
-      <div class="cost-summary">
-        <div class="cost-cat-card" style="border-left:2px solid var(--accent)">
-          <div class="cost-cat-label">Total Spend</div>
-          <div class="cost-cat-value" style="color:var(--accent)">${fmt$(total)}</div>
+    document.getElementById('expense-summary-row').innerHTML = `
+      <div class="expense-summary">
+        <div class="expense-cat-card" style="border-left:2px solid var(--accent)">
+          <div class="expense-cat-label">Total Spend</div>
+          <div class="expense-cat-value" style="color:var(--accent)">${fmt$(total)}</div>
         </div>
         ${topCats.map(([cat, amt]) => `
-        <div class="cost-cat-card">
-          <div class="cost-cat-label">${escHtml(cat)}</div>
-          <div class="cost-cat-value">${fmt$(amt)}</div>
+        <div class="expense-cat-card">
+          <div class="expense-cat-label">${escHtml(cat)}</div>
+          <div class="expense-cat-value">${fmt$(amt)}</div>
         </div>`).join('')}
       </div>`;
   }
 
   function render() {
-    const carFilter = document.getElementById('costs-filter-car').value;
-    const catFilter = document.getElementById('costs-filter-cat').value;
+    const carFilter = document.getElementById('expenses-filter-car').value;
+    const catFilter = document.getElementById('expenses-filter-cat').value;
     let items = _items;
     if (carFilter === '0') items = items.filter(c => !c.car_id);
     else if (carFilter) items = items.filter(c => String(c.car_id) === carFilter);
     if (catFilter) items = items.filter(c => c.category === catFilter);
 
-    const tbody = document.getElementById('costs-tbody');
+    const tbody = document.getElementById('expenses-tbody');
     if (items.length === 0) {
       tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
         <div class="empty-state-icon">$</div>
-        <div class="empty-state-title">No cost entries</div>
+        <div class="empty-state-title">No expenses</div>
         <div class="empty-state-sub">Track expenses, receipts, and invoices</div>
       </div></td></tr>`;
       return;
@@ -71,8 +71,8 @@ const Costs = (() => {
       <td style="font-weight:700;color:var(--accent)">${fmt$(c.amount)}</td>
       <td>${c.receipt_path ? `<a href="${escHtml(c.receipt_path)}" target="_blank" class="receipt-link">View ↗</a>` : '—'}</td>
       <td><div class="td-actions">
-        <button class="btn btn-ghost btn-sm" onclick="Costs.openEdit(${c.id})">Edit</button>
-        <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="Costs.del(${c.id})">✕</button>
+        <button class="btn btn-ghost btn-sm" onclick="Expenses.openEdit(${c.id})">Edit</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="Expenses.del(${c.id})">✕</button>
       </div></td>
     </tr>`).join('');
   }
@@ -133,17 +133,17 @@ const Costs = (() => {
   }
 
   function openAdd() {
-    Modal.show('Add Cost Entry', formHtml(), async () => {
+    Modal.show('Add Expense', formHtml(), async () => {
       const desc = document.getElementById('f-desc').value.trim();
       const amount = document.getElementById('f-amount').value;
       if (!desc || !amount) { Toast.show('Description and amount are required', 'error'); return; }
       try {
-        const item = await API.post('/api/costs', collectFormData());
+        const item = await API.post('/api/expenses', collectFormData());
         _items.unshift(item);
         renderSummary();
         render();
         Modal.hide();
-        Toast.show('Cost entry added');
+        Toast.show('Expense added');
       } catch (e) { Toast.show('Failed to save', 'error'); }
     });
   }
@@ -151,30 +151,30 @@ const Costs = (() => {
   function openEdit(id) {
     const c = _items.find(i => i.id === id);
     if (!c) return;
-    Modal.show('Edit Cost Entry', formHtml(c), async () => {
+    Modal.show('Edit Expense', formHtml(c), async () => {
       const desc = document.getElementById('f-desc').value.trim();
       const amount = document.getElementById('f-amount').value;
       if (!desc || !amount) { Toast.show('Description and amount are required', 'error'); return; }
       try {
-        const updated = await API.put(`/api/costs/${id}`, collectFormData(id));
+        const updated = await API.put(`/api/expenses/${id}`, collectFormData(id));
         const idx = _items.findIndex(i => i.id === id);
         _items[idx] = updated;
         renderSummary();
         render();
         Modal.hide();
-        Toast.show('Entry updated');
+        Toast.show('Expense updated');
       } catch (e) { Toast.show('Failed to update', 'error'); }
     });
   }
 
   async function del(id) {
-    if (!confirm('Delete this cost entry?')) return;
+    if (!confirm('Delete this expense?')) return;
     try {
-      await API.del(`/api/costs/${id}`);
+      await API.del(`/api/expenses/${id}`);
       _items = _items.filter(i => i.id !== id);
       renderSummary();
       render();
-      Toast.show('Entry deleted');
+      Toast.show('Expense deleted');
     } catch (e) { Toast.show('Failed to delete', 'error'); }
   }
 

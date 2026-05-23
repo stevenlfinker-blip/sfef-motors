@@ -63,9 +63,9 @@
       </div>
 
       <div class="nav-section-label">Finances & Events</div>
-      <div class="nav-item" data-section="costs">
+      <div class="nav-item" data-section="expenses">
         <span class="nav-icon">$</span>
-        <span class="nav-label">Costs</span>
+        <span class="nav-label">Expenses</span>
       </div>
       <div class="nav-item" data-section="events">
         <span class="nav-icon">◷</span>
@@ -255,21 +255,21 @@
       </div>
     </section>
 
-    <!-- Costs -->
-    <section id="section-costs" class="section">
+    <!-- Expenses -->
+    <section id="section-expenses" class="section">
       <div class="section-header">
-        <div class="section-title">Finances <span>/ Costs</span></div>
+        <div class="section-title">Finances <span>/ Expenses</span></div>
         <div class="section-actions">
-          <button class="btn btn-primary" onclick="Costs.openAdd()">+ Add Entry</button>
+          <button class="btn btn-primary" onclick="Expenses.openAdd()">+ Add Entry</button>
         </div>
       </div>
-      <div id="cost-summary-row"></div>
+      <div id="expense-summary-row"></div>
       <div class="filters-bar">
-        <select class="filter-select" id="costs-filter-car" onchange="Costs.render()">
+        <select class="filter-select" id="expenses-filter-car" onchange="Expenses.render()">
           <option value="">All Cars</option>
           <option value="0">General (No Car)</option>
         </select>
-        <select class="filter-select" id="costs-filter-cat" onchange="Costs.render()">
+        <select class="filter-select" id="expenses-filter-cat" onchange="Expenses.render()">
           <option value="">All Categories</option>
         </select>
       </div>
@@ -286,7 +286,7 @@
               <th></th>
             </tr>
           </thead>
-          <tbody id="costs-tbody"></tbody>
+          <tbody id="expenses-tbody"></tbody>
         </table>
       </div>
     </section>
@@ -365,7 +365,7 @@
 <script src="/js/parts.js"></script>
 <script src="/js/tools.js"></script>
 <script src="/js/cleaning.js"></script>
-<script src="/js/costs.js"></script>
+<script src="/js/expenses.js"></script>
 <script src="/js/events.js"></script>
 
 </body>

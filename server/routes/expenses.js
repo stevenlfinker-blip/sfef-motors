@@ -32,26 +32,26 @@ const upload = multer({
 });
 
 const SELECT = `
-  SELECT co.*, c.year || ' ' || c.make || ' ' || c.model AS car_name
-  FROM costs co LEFT JOIN cars c ON co.car_id = c.id
+  SELECT ex.*, c.year || ' ' || c.make || ' ' || c.model AS car_name
+  FROM expenses ex LEFT JOIN cars c ON ex.car_id = c.id
 `;
 
 router.get('/', (req, res) => {
-  res.json(db.prepare(SELECT + 'ORDER BY co.date DESC, co.id DESC').all());
+  res.json(db.prepare(SELECT + 'ORDER BY ex.date DESC, ex.id DESC').all());
 });
 
 router.post('/', upload.single('receipt'), (req, res) => {
   const { car_id, category, description, amount, date, notes } = req.body;
   const receipt_path = req.file ? `/uploads/${req.file.filename}` : '';
   const result = db.prepare(
-    'INSERT INTO costs (car_id, category, description, amount, date, receipt_path, notes) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO expenses (car_id, category, description, amount, date, receipt_path, notes) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).run(car_id||null, category||'', description, parseFloat(amount)||0, date||null, receipt_path, notes||'');
-  res.status(201).json(db.prepare(SELECT + 'WHERE co.id = ?').get(result.lastInsertRowid));
+  res.status(201).json(db.prepare(SELECT + 'WHERE ex.id = ?').get(result.lastInsertRowid));
 });
 
 router.put('/:id', upload.single('receipt'), (req, res) => {
   const { car_id, category, description, amount, date, notes } = req.body;
-  const existing = db.prepare('SELECT * FROM costs WHERE id = ?').get(req.params.id);
+  const existing = db.prepare('SELECT * FROM expenses WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
   let receipt_path = existing.receipt_path;
@@ -64,18 +64,18 @@ router.put('/:id', upload.single('receipt'), (req, res) => {
   }
 
   db.prepare(
-    'UPDATE costs SET car_id=?, category=?, description=?, amount=?, date=?, receipt_path=?, notes=? WHERE id=?'
+    'UPDATE expenses SET car_id=?, category=?, description=?, amount=?, date=?, receipt_path=?, notes=? WHERE id=?'
   ).run(car_id||null, category||'', description, parseFloat(amount)||0, date||null, receipt_path, notes||'', req.params.id);
-  res.json(db.prepare(SELECT + 'WHERE co.id = ?').get(req.params.id));
+  res.json(db.prepare(SELECT + 'WHERE ex.id = ?').get(req.params.id));
 });
 
 router.delete('/:id', (req, res) => {
-  const row = db.prepare('SELECT * FROM costs WHERE id = ?').get(req.params.id);
+  const row = db.prepare('SELECT * FROM expenses WHERE id = ?').get(req.params.id);
   if (row?.receipt_path) {
     const file = path.join(__dirname, '..', '..', 'data', row.receipt_path.replace('/uploads/', 'uploads/'));
     fs.unlink(file, () => {});
   }
-  db.prepare('DELETE FROM costs WHERE id = ?').run(req.params.id);
+  db.prepare('DELETE FROM expenses WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 

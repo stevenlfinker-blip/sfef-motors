@@ -591,7 +591,7 @@ const Dashboard = (() => {
         API.get('/api/parts'),
         API.get('/api/tools'),
         API.get('/api/cleaning'),
-        API.get('/api/costs'),
+        API.get('/api/expenses'),
         API.get('/api/events'),
         API.get('/api/watchlist'),
       ]);

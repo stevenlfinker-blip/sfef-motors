@@ -130,7 +130,7 @@ app.use('/api/maintenance', require('./routes/maintenance'));
 app.use('/api/parts', require('./routes/parts'));
 app.use('/api/tools', require('./routes/tools'));
 app.use('/api/cleaning', require('./routes/cleaning'));
-app.use('/api/costs', require('./routes/costs'));
+app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/watchlist', require('./routes/watchlist'));
 app.use('/api', require('./routes/import'));

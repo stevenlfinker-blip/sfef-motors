@@ -478,11 +478,11 @@ input[type=file]::file-selector-button {
 .dash-row-meta { color: var(--text-muted); font-size: 11px; }
 .dash-row-right { text-align: right; }
 
-/* ── Cost summary ── */
-.cost-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
-.cost-cat-card { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
-.cost-cat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .8px; font-weight: 600; }
-.cost-cat-value { font-size: 18px; font-weight: 800; color: var(--text); margin-top: 2px; }
+/* ── Expense summary ── */
+.expense-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.expense-cat-card { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+.expense-cat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .8px; font-weight: 600; }
+.expense-cat-value { font-size: 18px; font-weight: 800; color: var(--text); margin-top: 2px; }
 
 /* ── Scrollbar global ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -582,8 +582,8 @@ input[type=file]::file-selector-button {
     border-bottom: none;
   }
 
-  /* Cost summary 2-col */
-  .cost-summary { grid-template-columns: repeat(2, 1fr); }
+  /* Expense summary 2-col */
+  .expense-summary { grid-template-columns: repeat(2, 1fr); }
 
   /* Nav items — bigger tap targets */
   .nav-item { padding: 13px 16px; }

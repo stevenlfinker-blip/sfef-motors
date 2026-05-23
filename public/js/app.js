@@ -47,7 +47,7 @@ const SECTION_TITLES = {
   parts:       'Inventory · Parts',
   tools:       'Inventory · Tools',
   cleaning:    'Inventory · Cleaning',
-  costs:       'Finances · Costs',
+  expenses:    'Finances · Expenses',
   events:      'Schedule · Events',
 };
 
@@ -109,7 +109,7 @@ const App = {
       case 'parts':       Parts.load(); break;
       case 'tools':       Tools.load(); break;
       case 'cleaning':    Cleaning.load(); break;
-      case 'costs':       Costs.load(); break;
+      case 'expenses':    Expenses.load(); break;
       case 'events':      Events.load(); break;
     }
   },
