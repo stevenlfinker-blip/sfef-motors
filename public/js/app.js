@@ -143,6 +143,12 @@ const App = {
     } catch (_) {}
   },
 
+  cleaningBadge(status) {
+    const map = { 'In Stock': '#00d4ff', 'Low': '#f5a623', 'Out of Stock': '#e74c3c' };
+    const color = map[status] || 'var(--text-muted)';
+    return `<span style="color:${color};font-weight:600;font-size:11px">${escHtml(status || '—')}</span>`;
+  },
+
   // Keep for compatibility
   loadDashboard() { Dashboard.load(); },
 
