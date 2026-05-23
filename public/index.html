@@ -266,6 +266,7 @@
       </div>
       <div id="expense-summary-row"></div>
       <div class="filters-bar">
+        <input class="filter-select" type="text" id="expenses-search" placeholder="Search vendor or description…" oninput="Expenses.render()" style="min-width:200px">
         <select class="filter-select" id="expenses-filter-type" onchange="Expenses.render()">
           <option value="">All Types</option>
           <option value="Operating">Garage Operating</option>
@@ -279,18 +280,22 @@
         <select class="filter-select" id="expenses-filter-cat" onchange="Expenses.render()">
           <option value="">All Categories</option>
         </select>
+        <input class="filter-select" type="date" id="expenses-filter-from" onchange="Expenses.render()" title="From date">
+        <input class="filter-select" type="date" id="expenses-filter-to" onchange="Expenses.render()" title="To date">
+        <button class="btn btn-ghost btn-sm" onclick="Expenses.clearFilters()">Clear</button>
       </div>
+      <div id="expenses-result-count" style="font-size:11px;color:var(--text-muted);margin-bottom:8px"></div>
       <div class="card table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Type</th>
-              <th>Vendor</th>
+              <th class="sortable" onclick="Expenses._setSort('date')"><span id="sort-date">Date</span></th>
+              <th class="sortable" onclick="Expenses._setSort('expense_type')"><span id="sort-expense_type">Type</span></th>
+              <th class="sortable" onclick="Expenses._setSort('vendor')"><span id="sort-vendor">Vendor</span></th>
               <th>Description</th>
-              <th>Car</th>
-              <th>Category</th>
-              <th>Amount</th>
+              <th class="sortable" onclick="Expenses._setSort('car_name')"><span id="sort-car_name">Car</span></th>
+              <th class="sortable" onclick="Expenses._setSort('category')"><span id="sort-category">Category</span></th>
+              <th class="sortable" onclick="Expenses._setSort('amount')"><span id="sort-amount">Amount</span></th>
               <th>Receipt</th>
               <th></th>
             </tr>

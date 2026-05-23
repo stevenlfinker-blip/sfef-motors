@@ -1,6 +1,8 @@
 const Expenses = (() => {
   let _items = [];
   let _cars = [];
+  let _sortCol = 'date';
+  let _sortDir = 'desc';
 
   const TYPES = [
     { value: 'Operating',    label: 'Garage Operating',    color: '#00d4ff' },
@@ -70,22 +72,72 @@ const Expenses = (() => {
       </div>`;
   }
 
+  function _setSort(col) {
+    if (_sortCol === col) {
+      _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      _sortCol = col;
+      _sortDir = col === 'amount' ? 'desc' : 'asc';
+    }
+    // Update header indicators
+    ['date','expense_type','vendor','car_name','category','amount'].forEach(c => {
+      const el = document.getElementById('sort-' + c);
+      if (!el) return;
+      const base = { date:'Date', expense_type:'Type', vendor:'Vendor', car_name:'Car', category:'Category', amount:'Amount' }[c];
+      el.textContent = c === _sortCol ? base + (_sortDir === 'asc' ? ' ▲' : ' ▼') : base;
+    });
+    render();
+  }
+
+  function clearFilters() {
+    document.getElementById('expenses-search').value = '';
+    document.getElementById('expenses-filter-type').value = '';
+    document.getElementById('expenses-filter-car').value = '';
+    document.getElementById('expenses-filter-cat').value = '';
+    document.getElementById('expenses-filter-from').value = '';
+    document.getElementById('expenses-filter-to').value = '';
+    render();
+  }
+
   function render() {
+    const search    = (document.getElementById('expenses-search').value || '').toLowerCase().trim();
     const typeFilter = document.getElementById('expenses-filter-type').value;
     const carFilter  = document.getElementById('expenses-filter-car').value;
     const catFilter  = document.getElementById('expenses-filter-cat').value;
+    const dateFrom   = document.getElementById('expenses-filter-from').value;
+    const dateTo     = document.getElementById('expenses-filter-to').value;
+
     let items = _items;
+    if (search)    items = items.filter(e => (e.vendor||'').toLowerCase().includes(search) || (e.description||'').toLowerCase().includes(search));
     if (typeFilter) items = items.filter(e => e.expense_type === typeFilter);
     if (carFilter === '0') items = items.filter(e => !e.car_id);
     else if (carFilter) items = items.filter(e => String(e.car_id) === carFilter);
     if (catFilter) items = items.filter(e => e.category === catFilter);
+    if (dateFrom)  items = items.filter(e => e.date && e.date >= dateFrom);
+    if (dateTo)    items = items.filter(e => e.date && e.date <= dateTo);
+
+    // Sort
+    items = [...items].sort((a, b) => {
+      if (_sortCol === 'amount') {
+        return _sortDir === 'asc' ? (a.amount||0) - (b.amount||0) : (b.amount||0) - (a.amount||0);
+      }
+      const av = (a[_sortCol] || '').toLowerCase();
+      const bv = (b[_sortCol] || '').toLowerCase();
+      return _sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+
+    // Result count
+    const filtered = items.length < _items.length;
+    const total = items.reduce((s, e) => s + (e.amount || 0), 0);
+    document.getElementById('expenses-result-count').textContent =
+      filtered ? `${items.length} of ${_items.length} entries · ${fmt$(total)}` : `${items.length} entries · ${fmt$(total)}`;
 
     const tbody = document.getElementById('expenses-tbody');
     if (items.length === 0) {
       tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">
         <div class="empty-state-icon">$</div>
-        <div class="empty-state-title">No expenses</div>
-        <div class="empty-state-sub">Track expenses, receipts, and invoices</div>
+        <div class="empty-state-title">No expenses match</div>
+        <div class="empty-state-sub">Try adjusting your filters</div>
       </div></td></tr>`;
       return;
     }
@@ -300,5 +352,5 @@ const Expenses = (() => {
     Toast.show('QuickBooks CSV downloaded');
   }
 
-  return { load, render, openAdd, openEdit, del, exportQB, _onTypeChange, _removeReceipt };
+  return { load, render, openAdd, openEdit, del, exportQB, clearFilters, _setSort, _onTypeChange, _removeReceipt };
 })();
