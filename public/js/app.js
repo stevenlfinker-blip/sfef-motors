@@ -73,7 +73,13 @@ const App = {
 
   toggleSidebar() {
     const open = document.getElementById('sidebar').classList.toggle('open');
-    document.getElementById('sidebar-overlay').classList.toggle('visible', open);
+    const overlay = document.getElementById('sidebar-overlay');
+    overlay.classList.toggle('visible', open);
+    if (open) {
+      // iOS fires a ghost click on the overlay 300ms after touchstart; block it
+      overlay.style.pointerEvents = 'none';
+      setTimeout(() => { overlay.style.pointerEvents = ''; }, 400);
+    }
   },
   closeSidebar() {
     document.getElementById('sidebar').classList.remove('open');
