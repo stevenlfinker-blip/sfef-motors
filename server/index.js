@@ -1,10 +1,11 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
-const FileStore = require('session-file-store')(session);
+const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { pool, initDb } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,17 +23,18 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false }));
 
 // ── Sessions ──────────────────────────────────────
-const sessionDir = path.join(__dirname, '..', 'data', 'sessions');
-fs.mkdirSync(sessionDir, { recursive: true });
-
 app.use(session({
-  store: new FileStore({ path: sessionDir, retries: 1, logFn: () => {} }),
+  store: new pgSession({
+    pool,
+    tableName: 'session',
+    createTableIfMissing: true,
+  }),
   secret: process.env.SESSION_SECRET || 'sfef-motors-dev',
   resave: false,
   saveUninitialized: false,
   rolling: true,
   cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days — survive restarts
+    maxAge: 30 * 24 * 60 * 60 * 1000,
     httpOnly: true,
   },
 }));
@@ -59,7 +61,6 @@ app.get('/logout', (req, res) => {
 // ── Auth guard ────────────────────────────────────
 app.use((req, res, next) => {
   if (req.session.authenticated) return next();
-  // Return 401 for API calls, redirect for page requests
   if (req.path.startsWith('/api/') || req.headers.accept?.includes('application/json')) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -81,17 +82,22 @@ app.use('/api/watchlist', require('./routes/watchlist'));
 app.use('/api', require('./routes/import'));
 
 // ── Start ─────────────────────────────────────────
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n  SFEF MOTORS`);
-  console.log(`  -----------`);
-  console.log(`  Local:   http://localhost:${PORT}`);
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal) {
-        console.log(`  Network: http://${net.address}:${PORT}`);
+initDb().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n  SFEF MOTORS`);
+    console.log(`  -----------`);
+    console.log(`  Local:   http://localhost:${PORT}`);
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name]) {
+        if (net.family === 'IPv4' && !net.internal) {
+          console.log(`  Network: http://${net.address}:${PORT}`);
+        }
       }
     }
-  }
-  console.log('');
+    console.log('');
+  });
+}).catch(err => {
+  console.error('Failed to connect to database:', err.message);
+  process.exit(1);
 });

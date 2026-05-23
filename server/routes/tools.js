@@ -1,30 +1,41 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { pool } = require('../db');
 
-router.get('/', (req, res) => {
-  res.json(db.prepare('SELECT * FROM tools ORDER BY name ASC').all());
+router.get('/', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM tools ORDER BY name ASC');
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/', (req, res) => {
-  const { name, brand, category, location, condition, notes } = req.body;
-  const result = db.prepare(
-    'INSERT INTO tools (name, brand, category, location, condition, notes) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(name, brand || '', category || '', location || '', condition || 'Good', notes || '');
-  res.status(201).json(db.prepare('SELECT * FROM tools WHERE id = ?').get(result.lastInsertRowid));
+router.post('/', async (req, res) => {
+  try {
+    const { name, brand, category, location, condition, notes } = req.body;
+    const { rows } = await pool.query(
+      'INSERT INTO tools (name, brand, category, location, condition, notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [name, brand||'', category||'', location||'', condition||'Good', notes||'']
+    );
+    res.status(201).json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.put('/:id', (req, res) => {
-  const { name, brand, category, location, condition, notes } = req.body;
-  db.prepare(
-    'UPDATE tools SET name=?, brand=?, category=?, location=?, condition=?, notes=? WHERE id=?'
-  ).run(name, brand || '', category || '', location || '', condition || 'Good', notes || '', req.params.id);
-  res.json(db.prepare('SELECT * FROM tools WHERE id = ?').get(req.params.id));
+router.put('/:id', async (req, res) => {
+  try {
+    const { name, brand, category, location, condition, notes } = req.body;
+    const { rows } = await pool.query(
+      'UPDATE tools SET name=$1, brand=$2, category=$3, location=$4, condition=$5, notes=$6 WHERE id=$7 RETURNING *',
+      [name, brand||'', category||'', location||'', condition||'Good', notes||'', req.params.id]
+    );
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM tools WHERE id = ?').run(req.params.id);
-  res.json({ success: true });
+router.delete('/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM tools WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

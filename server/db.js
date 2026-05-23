@@ -1,119 +1,107 @@
-const { DatabaseSync } = require('node:sqlite');
-const path = require('path');
-const fs = require('fs');
+const { Pool } = require('pg');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'garage.db');
-fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-
-const db = new DatabaseSync(DB_PATH);
-
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS cars (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    year TEXT,
-    make TEXT,
-    model TEXT,
-    color TEXT,
-    mileage TEXT,
-    status TEXT DEFAULT 'Active',
-    notes TEXT DEFAULT '',
-    vin TEXT DEFAULT '',
-    ownership TEXT DEFAULT '',
-    registration TEXT DEFAULT '',
-    insurance TEXT DEFAULT ''
-  );
-
-  CREATE TABLE IF NOT EXISTS maintenance (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    car_id INTEGER,
-    title TEXT NOT NULL,
-    description TEXT DEFAULT '',
-    due_date TEXT,
-    due_mileage TEXT DEFAULT '',
-    completed INTEGER DEFAULT 0,
-    completed_date TEXT DEFAULT '',
-    cost REAL DEFAULT 0,
-    notes TEXT DEFAULT '',
-    FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS parts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    car_id INTEGER,
-    name TEXT NOT NULL,
-    part_number TEXT DEFAULT '',
-    quantity INTEGER DEFAULT 0,
-    location TEXT DEFAULT '',
-    cost_each REAL DEFAULT 0,
-    supplier TEXT DEFAULT '',
-    notes TEXT DEFAULT '',
-    FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS tools (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    brand TEXT DEFAULT '',
-    category TEXT DEFAULT '',
-    location TEXT DEFAULT '',
-    condition TEXT DEFAULT 'Good',
-    notes TEXT DEFAULT ''
-  );
-
-  CREATE TABLE IF NOT EXISTS cleaning (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product TEXT NOT NULL,
-    brand TEXT DEFAULT '',
-    type TEXT DEFAULT '',
-    qty REAL DEFAULT 0,
-    unit TEXT DEFAULT '',
-    status TEXT DEFAULT 'In Stock'
-  );
-
-  CREATE TABLE IF NOT EXISTS costs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    car_id INTEGER,
-    category TEXT DEFAULT '',
-    description TEXT NOT NULL,
-    amount REAL NOT NULL DEFAULT 0,
-    date TEXT,
-    receipt_path TEXT DEFAULT '',
-    notes TEXT DEFAULT '',
-    FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    car_id INTEGER,
-    title TEXT NOT NULL,
-    type TEXT DEFAULT '',
-    location TEXT DEFAULT '',
-    date TEXT,
-    notes TEXT DEFAULT '',
-    registered INTEGER DEFAULT 0,
-    FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS watchlist (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    year TEXT DEFAULT '',
-    make TEXT NOT NULL,
-    model TEXT NOT NULL,
-    asking_price REAL DEFAULT 0,
-    source TEXT DEFAULT '',
-    priority TEXT DEFAULT 'Medium',
-    notes TEXT DEFAULT '',
-    added_date TEXT DEFAULT ''
-  );
-`);
-
-// Migrations for existing databases
-['ownership', 'registration', 'insurance'].forEach(col => {
-  try { db.exec(`ALTER TABLE cars ADD COLUMN ${col} TEXT DEFAULT ''`); } catch (_) {}
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
-try { db.exec(`ALTER TABLE cars ADD COLUMN value REAL DEFAULT 0`); } catch (_) {}
 
-module.exports = db;
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cars (
+      id SERIAL PRIMARY KEY,
+      year TEXT,
+      make TEXT,
+      model TEXT,
+      color TEXT DEFAULT '',
+      mileage TEXT DEFAULT '',
+      status TEXT DEFAULT 'Active',
+      notes TEXT DEFAULT '',
+      vin TEXT DEFAULT '',
+      ownership TEXT DEFAULT '',
+      registration TEXT DEFAULT '',
+      insurance TEXT DEFAULT '',
+      value NUMERIC DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS maintenance (
+      id SERIAL PRIMARY KEY,
+      car_id INTEGER REFERENCES cars(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      due_date TEXT,
+      due_mileage TEXT DEFAULT '',
+      completed SMALLINT DEFAULT 0,
+      completed_date TEXT DEFAULT '',
+      cost NUMERIC DEFAULT 0,
+      notes TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS parts (
+      id SERIAL PRIMARY KEY,
+      car_id INTEGER REFERENCES cars(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      part_number TEXT DEFAULT '',
+      quantity INTEGER DEFAULT 0,
+      location TEXT DEFAULT '',
+      cost_each NUMERIC DEFAULT 0,
+      supplier TEXT DEFAULT '',
+      notes TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS tools (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      brand TEXT DEFAULT '',
+      category TEXT DEFAULT '',
+      location TEXT DEFAULT '',
+      condition TEXT DEFAULT 'Good',
+      notes TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS cleaning (
+      id SERIAL PRIMARY KEY,
+      product TEXT NOT NULL,
+      brand TEXT DEFAULT '',
+      type TEXT DEFAULT '',
+      qty NUMERIC DEFAULT 0,
+      unit TEXT DEFAULT '',
+      status TEXT DEFAULT 'In Stock'
+    );
+
+    CREATE TABLE IF NOT EXISTS costs (
+      id SERIAL PRIMARY KEY,
+      car_id INTEGER REFERENCES cars(id) ON DELETE SET NULL,
+      category TEXT DEFAULT '',
+      description TEXT NOT NULL,
+      amount NUMERIC NOT NULL DEFAULT 0,
+      date TEXT,
+      receipt_path TEXT DEFAULT '',
+      notes TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS events (
+      id SERIAL PRIMARY KEY,
+      car_id INTEGER REFERENCES cars(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      type TEXT DEFAULT '',
+      location TEXT DEFAULT '',
+      date TEXT,
+      notes TEXT DEFAULT '',
+      registered SMALLINT DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS watchlist (
+      id SERIAL PRIMARY KEY,
+      year TEXT DEFAULT '',
+      make TEXT NOT NULL,
+      model TEXT NOT NULL,
+      asking_price NUMERIC DEFAULT 0,
+      source TEXT DEFAULT '',
+      priority TEXT DEFAULT 'Medium',
+      notes TEXT DEFAULT '',
+      added_date TEXT DEFAULT ''
+    );
+  `);
+}
+
+module.exports = { pool, initDb };
