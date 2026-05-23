@@ -150,7 +150,7 @@ const Dashboard = (() => {
   function monthlySpendWidget(costs) {
     const now = new Date();
     const months = [];
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       const label = d.toLocaleDateString('en-US', { month: 'short' });
@@ -171,7 +171,7 @@ const Dashboard = (() => {
 
     return `<div class="dash-panel">
       <div class="dash-panel-header">
-        <span class="dash-panel-title">Monthly Spending</span>
+        <span class="dash-panel-title">Monthly Spending (Trailing 12 Mo)</span>
         <span style="font-size:11px;color:var(--accent)">${fmt$(totalMonth)} this mo ${deltaHtml}</span>
       </div>
       <div class="dash-panel-body" style="padding:8px 0 0">
