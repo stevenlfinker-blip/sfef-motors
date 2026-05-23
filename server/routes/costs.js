@@ -16,7 +16,20 @@ const storage = multer.diskStorage({
     cb(null, unique + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
+const ALLOWED_EXT = /\.(jpg|jpeg|png|gif|webp|heic|pdf)$/i;
+const ALLOWED_MIME = /^(image\/(jpeg|png|gif|webp|heic)|application\/pdf)$/;
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_EXT.test(path.extname(file.originalname)) && ALLOWED_MIME.test(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images (JPG, PNG, GIF, WebP, HEIC) and PDFs are allowed'));
+    }
+  },
+});
 
 const SELECT = `
   SELECT co.*, c.year || ' ' || c.make || ' ' || c.model AS car_name
