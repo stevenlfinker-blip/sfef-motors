@@ -15,11 +15,6 @@ services:
         fromDatabase:
           name: sfef-db
           property: connectionString
-    disk:
-      name: sfef-uploads
-      mountPath: /opt/render/project/src/data/uploads
-      sizeGB: 1
-
 databases:
   - name: sfef-db
     databaseName: sfef_motors
