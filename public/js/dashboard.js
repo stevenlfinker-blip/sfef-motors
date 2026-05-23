@@ -1,6 +1,26 @@
 const Dashboard = (() => {
   const COLORS = ['#00d4ff','#00e5a0','#ff6a00','#7c4dff','#00aaff','#facc15','#ff3a5c','#f472b6','#a3e635','#fb923c'];
 
+  let _hudClockTimer = null;
+  function startHudClock() {
+    if (_hudClockTimer) clearInterval(_hudClockTimer);
+    function tick() {
+      const clockEl = document.getElementById('hud-clock');
+      const dateEl  = document.getElementById('hud-date');
+      if (!clockEl || !dateEl) { clearInterval(_hudClockTimer); _hudClockTimer = null; return; }
+      const n  = new Date();
+      const hh = String(n.getHours()).padStart(2, '0');
+      const mm = String(n.getMinutes()).padStart(2, '0');
+      const ss = String(n.getSeconds()).padStart(2, '0');
+      clockEl.textContent = `${hh}:${mm}:${ss}`;
+      const dd = String(n.getDate()).padStart(2, '0');
+      const mo = String(n.getMonth() + 1).padStart(2, '0');
+      dateEl.textContent = `${dd}.${mo}.${n.getFullYear()}`;
+    }
+    tick();
+    _hudClockTimer = setInterval(tick, 1000);
+  }
+
   // ── Date helpers ──────────────────────────────────
   function parseMixedDate(s) {
     if (!s) return null;
@@ -72,28 +92,58 @@ const Dashboard = (() => {
     </svg>`;
   }
 
-  // ── Widget: Stats Row ─────────────────────────────
-  function statsWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist) {
-    const totalSpend = costs.reduce((s, c) => s + (c.amount || 0), 0);
-    const active      = cars.filter(c => c.status === 'Active').length;
+  // ── Widget: HUD Header + Stat Cards ──────────────
+  function hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist) {
+    const yr         = new Date().getFullYear();
+    const totalValue = cars.reduce((s, c) => s + (c.value || 0), 0);
+    const active     = cars.filter(c => c.status === 'Active').length;
     const restoration = cars.filter(c => c.status === 'Restoration').length;
-    const pending     = maint.filter(m => !m.completed).length;
-    const upcoming    = events.filter(e => { const d = daysUntil(e.date); return d !== null && d >= 0; }).length;
-    const totalValue  = cars.reduce((s, c) => s + (c.value || 0), 0);
+    const topCar     = [...cars].sort((a, b) => (b.value || 0) - (a.value || 0))[0];
+    const ytdCosts   = costs.filter(c => c.date && c.date.startsWith(String(yr)));
+    const ytdTotal   = ytdCosts.reduce((s, c) => s + (c.amount || 0), 0);
+    const pendingCount = maint.filter(m => !m.completed).length;
+    const expiringCount = cars.reduce((n, c) => {
+      let cnt = 0;
+      const rd = daysFromNow(c.registration); if (rd !== null && rd >= 0 && rd <= 60) cnt++;
+      const id = daysFromNow(c.insurance);    if (id !== null && id >= 0 && id <= 60) cnt++;
+      return n + cnt;
+    }, 0);
+    const makes = [...new Set(cars.map(c => c.make).filter(Boolean))];
+    const byBrand = {};
+    for (const c of cars) { if (c.make) byBrand[c.make] = (byBrand[c.make] || 0) + (c.value || 0); }
+    const topBrand = Object.entries(byBrand).sort((a, b) => b[1] - a[1])[0];
 
-    const stat = (label, val, style='') =>
-      `<div class="stat-card"><div class="stat-label">${label}</div><div class="stat-value${style}">${val}</div></div>`;
+    function card(color, label, value, sub, meta) {
+      return `<div class="hud-card" style="--hud-color:${color}">
+        <div class="hud-card-corner">┐</div>
+        <div class="hud-card-label">${label}</div>
+        <div class="hud-card-value" style="color:${color}">${value}</div>
+        <div class="hud-card-sub">${sub}</div>
+        <div class="hud-card-meta">${meta}</div>
+      </div>`;
+    }
 
-    return `<div class="stats-grid">
-      ${stat('Total Cars', cars.length, ' accent')}
-      ${stat('Active', active)}
-      ${stat('Restoration', restoration)}
-      ${stat('Pending Maint.', pending)}
-      ${stat('Upcoming Events', upcoming)}
-      ${stat('Parts in Stock', parts.length)}
-      ${stat('Watchlist', watchlist.length)}
-      ${stat('Fleet Value', `<span style="font-size:16px">${fmt$(totalValue)}</span>`)}
-    </div>`;
+    return `
+      <div class="hud-header">
+        <div class="hud-header-left">
+          <div class="hud-title">SFEF MOTORS</div>
+          <div class="hud-subtitle">FLEET COMMAND CENTER &middot; OPERATIONS DASHBOARD</div>
+        </div>
+        <div class="hud-status-group">
+          <span class="hud-dot"></span>
+          <span class="hud-online">SYSTEM ONLINE</span>
+          <span id="hud-clock" class="hud-clock">--:--:--</span>
+          <span id="hud-date" class="hud-date">--.--.----</span>
+        </div>
+      </div>
+      <div class="hud-cards">
+        ${card('#facc15', 'FLEET VALUE',    fmt$(totalValue),  `${cars.length} vehicle${cars.length !== 1 ? 's' : ''}`, 'Est. Market ' + yr)}
+        ${card('#00e5a0', 'ACTIVE FLEET',   String(active),    `${restoration} in restoration`, 'Operational')}
+        ${card('#00d4ff', 'TOP ASSET',      topCar ? escHtml(topCar.make + ' ' + topCar.model) : '—', topCar ? escHtml(String(topCar.year || '')) : 'No cars', topCar && topCar.value ? fmt$(topCar.value) : '—')}
+        ${card('#ff6a00', 'YTD SPENDING',   fmt$(ytdTotal),    `${ytdCosts.length} expense${ytdCosts.length !== 1 ? 's' : ''} in ${yr}`, ytdCosts.length === 0 ? 'Add expenses →' : 'This calendar year')}
+        ${card('#ff3a5c', 'PENDING TASKS',  String(pendingCount), `${expiringCount} expiring within 60d`, 'Maintenance queue')}
+        ${card('#7c4dff', 'BRANDS',         String(makes.length), topBrand ? `Led by ${escHtml(topBrand[0])}` : 'No data yet', `${cars.length} total vehicles`)}
+      </div>`;
   }
 
   // ── Widget: Monthly Spending Chart ────────────────
@@ -458,17 +508,43 @@ const Dashboard = (() => {
       Storage:     'badge-storage',
       'For Sale':  'badge-for-sale',
     };
-    const rows = cars.map(c => `<div class="dash-row">
-      <div>
-        <div class="dash-row-label">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</div>
-        <div class="dash-row-meta">${escHtml(c.color||'—')} · ${escHtml(c.mileage||'0')} mi</div>
-      </div>
-      <span class="badge ${STATUS_BADGE[c.status]||'badge-neutral'}">${escHtml(c.status)}</span>
-    </div>`).join('');
+
+    const sorted = [...cars].sort((a, b) => (b.value || 0) - (a.value || 0));
+    const top    = sorted.slice(0, 5);
+    const rest   = sorted.slice(5);
+
+    function row(c) {
+      return `<div class="dash-row">
+        <div>
+          <div class="dash-row-label">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</div>
+          <div class="dash-row-meta">${escHtml(c.color||'—')} · ${escHtml(c.mileage||'0')} mi${c.value ? ' · ' + fmt$(c.value) : ''}</div>
+        </div>
+        <span class="badge ${STATUS_BADGE[c.status]||'badge-neutral'}">${escHtml(c.status)}</span>
+      </div>`;
+    }
+
+    const restHtml = rest.length ? `
+      <div id="fleet-extra" style="display:none">${rest.map(row).join('')}</div>
+      <div style="padding:8px 0 2px;text-align:center">
+        <button onclick="
+          const el=document.getElementById('fleet-extra');
+          const btn=this;
+          if(el.style.display==='none'){el.style.display='';btn.textContent='Show less ▲';}
+          else{el.style.display='none';btn.textContent='Show ${rest.length} more ▼';}
+        " style="background:none;border:1px solid var(--border-light);color:var(--accent);font-size:11px;padding:4px 14px;border-radius:3px;cursor:pointer">
+          Show ${rest.length} more ▼
+        </button>
+      </div>` : '';
+
     return `<div class="dash-panel">
-      <div class="dash-panel-header"><span class="dash-panel-title">Fleet Status</span></div>
+      <div class="dash-panel-header">
+        <span class="dash-panel-title">Fleet Status</span>
+        <span style="font-size:11px;color:var(--text-muted)">${cars.length} vehicles</span>
+      </div>
       <div class="dash-panel-body">
-        ${rows || '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No cars added yet.</div>'}
+        ${sorted.length === 0
+          ? '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No cars added yet.</div>'
+          : top.map(row).join('') + restHtml}
       </div>
     </div>`;
   }
@@ -521,28 +597,20 @@ const Dashboard = (() => {
       ]);
 
       el.innerHTML =
-        statsWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist) +
+        hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist) +
         '<div class="dash-grid-2-wide" style="margin-top:12px">' +
           monthlySpendWidget(costs) +
           spendByCatWidget(costs) +
         '</div>' +
+        '<div class="dash-full">' + fleetStatusWidget(cars) + '</div>' +
         mileageTrackerWidget(cars) +
-        '<div class="dash-grid-2">' +
-          fleetHealthWidget(cars, maint) +
-          expiryAlertsWidget(cars) +
-        '</div>' +
-        '<div class="dash-grid-2">' +
-          watchlistWidget(watchlist) +
-          activityFeedWidget(cars, maint, parts, tools, cleaning, costs, events) +
-        '</div>' +
+        '<div class="dash-full">' + watchlistWidget(watchlist) + '</div>' +
         '<div class="dash-grid-2">' +
           collectionValueWidget(cars) +
           upcomingEventsWidget(events) +
         '</div>' +
-        '<div class="dash-grid-2">' +
-          pendingMaintWidget(maint) +
-          fleetStatusWidget(cars) +
-        '</div>';
+        '<div class="dash-full">' + pendingMaintWidget(maint) + '</div>';
+      startHudClock();
     } catch (err) {
       if (err.message === 'Session expired') return;
       el.innerHTML = `<div style="color:var(--red);padding:20px">Failed to load dashboard: ${escHtml(err.message)}<br>
