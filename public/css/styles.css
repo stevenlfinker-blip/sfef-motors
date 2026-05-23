@@ -40,10 +40,16 @@
 /* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; overflow: hidden; }
-body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.5; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--font);
+  font-size: 13px; line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
 a { color: var(--accent); text-decoration: none; }
-button { cursor: pointer; font-family: var(--font); }
+button { cursor: pointer; font-family: var(--font); touch-action: manipulation; }
 input, select, textarea { font-family: var(--font); }
+.nav-item { touch-action: manipulation; }
 
 /* ── Layout ── */
 #layout { display: grid; grid-template-columns: var(--sidebar-w) 1fr; grid-template-rows: var(--header-h) 1fr; height: 100vh; }
@@ -510,7 +516,7 @@ input[type=file]::file-selector-button {
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
-  :root { --sidebar-w: 260px; --header-h: 52px; }
+  :root { --sidebar-w: 280px; --header-h: 52px; }
 
   #layout {
     grid-template-columns: 1fr;
@@ -529,19 +535,24 @@ input[type=file]::file-selector-button {
   }
   #sidebar.open { left: 0; }
 
-  /* Topbar spans full width */
-  #topbar { grid-column: 1; }
-  #content { grid-column: 1; padding: 14px; }
+  /* Topbar full-width, tighter padding */
+  #topbar { grid-column: 1; padding: 0 12px; }
+  #content { grid-column: 1; padding: 12px; }
+
+  /* Hide topbar clock — HUD has its own live clock */
+  #clock { display: none; }
 
   /* Show hamburger */
-  #hamburger { display: flex; align-items: center; margin-right: 8px; }
+  #hamburger { display: flex; align-items: center; margin-right: 4px; }
 
   /* Stat cards — 2 columns on mobile */
   .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .stat-value { font-size: 20px; }
 
   /* Dashboard panels stack */
-  .dash-grid { grid-template-columns: 1fr; }
+  .dash-grid          { grid-template-columns: 1fr; }
+  .dash-grid-2        { grid-template-columns: 1fr !important; }
+  .dash-grid-2-wide   { grid-template-columns: 1fr !important; }
 
   /* Car cards full width */
   .card-grid { grid-template-columns: 1fr; }
@@ -553,32 +564,72 @@ input[type=file]::file-selector-button {
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { min-width: 560px; }
 
-  /* Modal full screen */
+  /* Modal → bottom sheet */
+  #modal-overlay { align-items: flex-end; }
   #modal {
     width: 100%;
     max-width: 100%;
-    height: 100%;
-    max-height: 100%;
-    border-radius: 0;
+    height: auto;
+    max-height: 92vh;
+    border-radius: 12px 12px 0 0;
     border-left: none;
     border-right: none;
+    border-bottom: none;
   }
-  #modal-overlay { align-items: flex-end; }
-  #modal { height: auto; max-height: 92vh; border-radius: 12px 12px 0 0; }
 
-  /* Cost summary scroll */
+  /* Cost summary 2-col */
   .cost-summary { grid-template-columns: repeat(2, 1fr); }
 
-  /* Nav items — bigger tap targets on touch */
-  .nav-item { padding: 12px 16px; }
-  .sidebar-footer-btn { padding: 10px 8px; }
+  /* Nav items — bigger tap targets */
+  .nav-item { padding: 13px 16px; }
+  .sidebar-footer-btn { padding: 11px 10px; font-size: 12px; }
+
+  /* Section header wraps so Add button stays reachable */
+  .section-header { flex-wrap: wrap; gap: 8px; }
+
+  /* Buttons — minimum 44px touch target height */
+  .btn    { min-height: 40px; }
+  .btn-sm { min-height: 36px; padding: 6px 12px; font-size: 11px; }
 
   /* Safe area for iPhone notch / home bar */
-  #content { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+  #content { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
   #sidebar { padding-bottom: env(safe-area-inset-bottom); }
+  #topbar  { padding-top: env(safe-area-inset-top); }
 
-  /* Dashboard widget grids collapse on mobile */
-  .dash-grid-2 { grid-template-columns: 1fr !important; }
+  /* ── HUD header stacks vertically on mobile ── */
+  .hud-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 16px 12px;
+  }
+  .hud-title    { font-size: 20px; letter-spacing: 5px; }
+  .hud-subtitle { font-size: 8px; letter-spacing: 2px; }
+  .hud-status-group { gap: 8px; flex-wrap: wrap; }
+  .hud-clock  { font-size: 15px; letter-spacing: 2px; }
+  .hud-date   { font-size: 9px; }
+  .hud-online { font-size: 8px; }
+
+  /* HUD cards — 2 per row on mobile */
+  .hud-cards { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; margin-bottom: 12px; }
+  .hud-card  { padding: 12px 12px 10px; }
+  .hud-card-value { font-size: 17px; }
+  .hud-card-sub   { font-size: 9px; }
+  .hud-card-meta  { font-size: 8px; }
+
+  /* ── Prevent iOS auto-zoom on input focus (must be ≥16px) ── */
+  input[type=text],
+  input[type=number],
+  input[type=date],
+  input[type=email],
+  input[type=file],
+  input[type=password],
+  select,
+  textarea { font-size: 16px; }
+
+  /* Filter selects also need it */
+  .filter-select  { font-size: 16px; }
+  .search-input   { font-size: 16px; }
 }
 
 /* ── Dashboard widget grids ── */

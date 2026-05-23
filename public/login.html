@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
   <title>SFEF Motors — Login</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -12,12 +15,15 @@
       color: #cce8f0;
       font-family: 'Helvetica Neue', Arial, system-ui, sans-serif;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .wrap { width: 340px; padding: 20px; }
+    .wrap { width: 340px; max-width: calc(100vw - 32px); padding: 20px; }
 
     /* Logo */
     .logo { text-align: center; margin-bottom: 36px; }
@@ -76,11 +82,12 @@
       border-radius: 4px;
       color: #cce8f0;
       padding: 10px 12px;
-      font-size: 15px;
+      font-size: 16px; /* ≥16px prevents iOS auto-zoom */
       outline: none;
       letter-spacing: 3px;
       transition: border-color .15s, box-shadow .15s;
       font-family: inherit;
+      -webkit-tap-highlight-color: transparent;
     }
     input[type=password]:focus {
       border-color: #00d4ff;
@@ -91,7 +98,7 @@
     button[type=submit] {
       width: 100%;
       margin-top: 20px;
-      padding: 11px;
+      padding: 14px;
       background: transparent;
       border: 1px solid #00d4ff;
       border-radius: 4px;
@@ -102,6 +109,8 @@
       box-shadow: 0 0 12px rgba(0,212,255,.25);
       transition: all .15s;
       font-family: inherit;
+      touch-action: manipulation;
+      min-height: 48px;
     }
     button[type=submit]:hover {
       background: rgba(0,212,255,.1);
