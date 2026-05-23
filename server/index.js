@@ -2,9 +2,13 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const FileStore = require('session-file-store')(session);
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,6 +20,20 @@ if (!APP_PASSWORD) {
 }
 
 fs.mkdirSync(path.join(__dirname, '..', 'data', 'uploads'), { recursive: true });
+
+// ── Security headers ──────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false, // inline scripts in HTML — would need nonces to enable
+}));
+
+// ── Rate limiting ─────────────────────────────────
+app.use('/login', rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,                   // 10 attempts per window
+  message: 'Too many login attempts. Try again in 15 minutes.',
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
 // ── Body parsers ──────────────────────────────────
 app.use(express.json({ limit: '50mb' }));
@@ -34,6 +52,8 @@ app.use(session({
   cookie: {
     maxAge: 30 * 24 * 60 * 60 * 1000,
     httpOnly: true,
+    secure: IS_PROD,       // HTTPS only in production
+    sameSite: 'strict',    // blocks cross-site request attacks
   },
 }));
 
