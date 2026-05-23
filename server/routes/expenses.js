@@ -62,6 +62,10 @@ router.put('/:id', upload.single('receipt'), (req, res) => {
       fs.unlink(oldFile, () => {});
     }
     receipt_path = `/uploads/${req.file.filename}`;
+  } else if (req.body.remove_receipt === '1' && existing.receipt_path) {
+    const oldFile = path.join(__dirname, '..', '..', 'data', existing.receipt_path.replace('/uploads/', 'uploads/'));
+    fs.unlink(oldFile, () => {});
+    receipt_path = '';
   }
 
   db.prepare(

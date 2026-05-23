@@ -117,6 +117,24 @@ const Expenses = (() => {
     return cats.map(k => `<option value="${k}" ${selectedCat === k ? 'selected':''}>${k}</option>`).join('');
   }
 
+  function _receiptPreviewHtml(receiptPath) {
+    if (!receiptPath) return '';
+    const isImage = /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(receiptPath);
+    const preview = isImage
+      ? `<img src="${escHtml(receiptPath)}" style="max-width:100%;max-height:200px;border-radius:6px;display:block;margin-bottom:8px;border:1px solid var(--border)">`
+      : `<div style="padding:12px;background:var(--elevated);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;font-size:13px">📄 PDF Receipt</div>`;
+    return `
+      <div id="current-receipt">
+        ${preview}
+        <div style="display:flex;gap:10px;align-items:center">
+          <a href="${escHtml(receiptPath)}" target="_blank" class="receipt-link" style="font-size:12px">View full ↗</a>
+          <button type="button" class="btn btn-ghost btn-sm" style="color:var(--red);font-size:12px" onclick="Expenses._removeReceipt()">✕ Remove</button>
+        </div>
+        <input type="hidden" id="f-remove-receipt" value="0">
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Upload a new file to replace</div>`;
+  }
+
   function formHtml(e = {}) {
     const typeOpts = TYPES.map(t => `<option value="${t.value}" ${e.expense_type === t.value ? 'selected':''}>${t.label}</option>`).join('');
     const catOpts  = _catOpts(e.expense_type, e.category);
@@ -159,13 +177,20 @@ const Expenses = (() => {
       </div>
       <div class="form-row">
         <label>Receipt / Invoice</label>
-        <input type="file" id="f-receipt" accept="image/*,.pdf">
-        ${e.receipt_path ? `<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">Current: <a href="${escHtml(e.receipt_path)}" target="_blank" class="receipt-link">View existing ↗</a></div>` : ''}
+        ${_receiptPreviewHtml(e.receipt_path)}
+        <input type="file" id="f-receipt" accept="image/*,.pdf" style="margin-top:${e.receipt_path ? '6px' : '0'}">
       </div>
       <div class="form-row">
         <label>Notes</label>
         <textarea id="f-notes">${escHtml(e.notes || '')}</textarea>
       </div>`;
+  }
+
+  function _removeReceipt() {
+    const el = document.getElementById('current-receipt');
+    if (el) el.style.display = 'none';
+    const flag = document.getElementById('f-remove-receipt');
+    if (flag) flag.value = '1';
   }
 
   // Repopulate category dropdown when type changes
@@ -186,6 +211,8 @@ const Expenses = (() => {
     fd.append('category', document.getElementById('f-category').value);
     fd.append('car_id', document.getElementById('f-car').value || '');
     fd.append('notes', document.getElementById('f-notes').value.trim());
+    const removeFlag = document.getElementById('f-remove-receipt');
+    if (removeFlag) fd.append('remove_receipt', removeFlag.value);
     const file = document.getElementById('f-receipt').files[0];
     if (file) fd.append('receipt', file);
     return fd;
@@ -273,5 +300,5 @@ const Expenses = (() => {
     Toast.show('QuickBooks CSV downloaded');
   }
 
-  return { load, render, openAdd, openEdit, del, exportQB, _onTypeChange };
+  return { load, render, openAdd, openEdit, del, exportQB, _onTypeChange, _removeReceipt };
 })();
