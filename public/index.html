@@ -114,6 +114,12 @@
           <button class="btn btn-primary" onclick="Cars.openAdd()">+ Add Car</button>
         </div>
       </div>
+      <div class="fleet-tabs" id="fleet-tabs">
+        <button class="fleet-tab active" onclick="Cars.setFilter('All')" id="ftab-All">All</button>
+        <button class="fleet-tab" onclick="Cars.setFilter('Collectable')" id="ftab-Collectable">⭐ Collectables</button>
+        <button class="fleet-tab" onclick="Cars.setFilter('Daily')" id="ftab-Daily">Daily Drivers</button>
+        <button class="fleet-tab" onclick="Cars.setFilter('Lease')" id="ftab-Lease">Leases</button>
+      </div>
       <div id="cars-grid" class="card-grid"></div>
     </section>
 

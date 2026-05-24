@@ -1,8 +1,16 @@
 const Cars = (() => {
   let _cars = [];
+  let _catFilter = 'All';
 
-  const STATUS_OPTS = ['Active', 'Restoration', 'Storage', 'For Sale'];
+  const STATUS_OPTS    = ['Active', 'Restoration', 'Storage', 'For Sale'];
   const OWNERSHIP_OPTS = ['Free and clear', 'Lease', 'Financed', 'Under Management', 'Other'];
+  const CATEGORY_OPTS  = ['Collectable', 'Daily', 'Lease'];
+
+  const CAT_META = {
+    Collectable: { label: '⭐ Collectables', color: 'var(--accent)',  dim: 'var(--accent-dim, rgba(240,192,0,.15))' },
+    Daily:       { label: 'Daily Drivers',  color: 'var(--blue)',    dim: 'var(--blue-dim)' },
+    Lease:       { label: 'Leases',         color: 'var(--purple)',  dim: 'var(--purple-dim)' },
+  };
 
   async function load() {
     try {
@@ -11,19 +19,66 @@ const Cars = (() => {
     } catch (e) { Toast.show('Failed to load cars', 'error'); }
   }
 
+  function setFilter(cat) {
+    _catFilter = cat;
+    document.querySelectorAll('.fleet-tab').forEach(el => el.classList.remove('active'));
+    const tab = document.getElementById('ftab-' + cat);
+    if (tab) tab.classList.add('active');
+    render();
+  }
+
+  function _updateTabCounts() {
+    ['All', 'Collectable', 'Daily', 'Lease'].forEach(cat => {
+      const el = document.getElementById('ftab-' + cat);
+      if (!el) return;
+      const count = cat === 'All' ? _cars.length : _cars.filter(c => c.category === cat).length;
+      const base = cat === 'All' ? 'All' : CAT_META[cat]?.label || cat;
+      el.textContent = `${base} (${count})`;
+    });
+  }
+
   function render() {
     const grid = document.getElementById('cars-grid');
-    if (_cars.length === 0) {
+    _updateTabCounts();
+
+    let cars = _catFilter === 'All' ? _cars : _cars.filter(c => c.category === _catFilter);
+
+    if (cars.length === 0) {
       grid.innerHTML = `
         <div class="empty-state" style="grid-column:1/-1">
           <div class="empty-state-icon">◉</div>
-          <div class="empty-state-title">No cars in your fleet</div>
-          <div class="empty-state-sub">Add your first vehicle to get started</div>
+          <div class="empty-state-title">No cars in this category</div>
+          <div class="empty-state-sub">Add a car or switch categories</div>
           <button class="btn btn-primary" onclick="Cars.openAdd()">+ Add Car</button>
         </div>`;
       return;
     }
-    grid.innerHTML = _cars.map(c => carCard(c)).join('');
+
+    if (_catFilter !== 'All') {
+      grid.innerHTML = cars.map(c => carCard(c)).join('');
+      return;
+    }
+
+    // Grouped view — section headers span full width
+    const order = ['Collectable', 'Daily', 'Lease'];
+    const groups = order.map(cat => ({
+      cat,
+      meta: CAT_META[cat],
+      cars: cars.filter(c => c.category === cat),
+    })).filter(g => g.cars.length > 0);
+
+    // Any uncategorised fallback
+    const known = new Set(order);
+    const other = cars.filter(c => !known.has(c.category));
+    if (other.length) groups.push({ cat: 'Other', meta: { label: 'Other', color: 'var(--text-muted)', dim: 'var(--elevated)' }, cars: other });
+
+    grid.innerHTML = groups.map(g => `
+      <div class="fleet-group-header" style="grid-column:1/-1;border-left:3px solid ${g.meta.color}">
+        <span style="color:${g.meta.color};font-weight:700;font-size:13px">${g.meta.label}</span>
+        <span style="color:var(--text-muted);font-size:11px;margin-left:8px">${g.cars.length} vehicle${g.cars.length !== 1 ? 's' : ''} · ${fmt$(g.cars.reduce((s,c)=>s+(c.value||0),0))}</span>
+      </div>
+      ${g.cars.map(c => carCard(c)).join('')}
+    `).join('');
   }
 
   function statusClass(s) {
@@ -75,6 +130,12 @@ const Cars = (() => {
     return `<span class="badge" style="background:${bg};color:${fg}">${escHtml(o)}</span>`;
   }
 
+  function categoryBadge(cat) {
+    const m = CAT_META[cat];
+    if (!m) return '';
+    return `<span class="badge" style="background:${m.dim};color:${m.color};font-size:9px;letter-spacing:.5px">${escHtml(m.label)}</span>`;
+  }
+
   function carCard(c) {
     return `
       <div class="car-card">
@@ -85,6 +146,7 @@ const Cars = (() => {
             <div class="car-card-name">${escHtml(c.make)} ${escHtml(c.model)}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+            ${categoryBadge(c.category)}
             <span class="badge ${statusClass(c.status)}">${escHtml(c.status)}</span>
             ${c.ownership ? ownershipBadge(c.ownership) : ''}
           </div>
@@ -109,7 +171,8 @@ const Cars = (() => {
 
   function formHtml(c = {}) {
     const statOpts = STATUS_OPTS.map(s => `<option value="${s}" ${c.status === s ? 'selected' : ''}>${s}</option>`).join('');
-    const ownOpts = OWNERSHIP_OPTS.map(s => `<option value="${s}" ${c.ownership === s ? 'selected' : ''}>${s}</option>`).join('');
+    const ownOpts  = OWNERSHIP_OPTS.map(s => `<option value="${s}" ${c.ownership === s ? 'selected' : ''}>${s}</option>`).join('');
+    const catOpts  = CATEGORY_OPTS.map(s => `<option value="${s}" ${(c.category||'Daily') === s ? 'selected' : ''}>${s === 'Collectable' ? '⭐ Collectable' : s === 'Lease' ? 'Lease' : 'Daily Driver'}</option>`).join('');
     return `
       <div class="form-row-2">
         <div class="form-row">
@@ -120,6 +183,10 @@ const Cars = (() => {
           <label>Status</label>
           <select id="f-status">${statOpts}</select>
         </div>
+      </div>
+      <div class="form-row">
+        <label>Category</label>
+        <select id="f-category">${catOpts}</select>
       </div>
       <div class="form-row-2">
         <div class="form-row">
@@ -177,6 +244,7 @@ const Cars = (() => {
       color:        document.getElementById('f-color').value.trim(),
       mileage:      document.getElementById('f-mileage').value.trim(),
       status:       document.getElementById('f-status').value,
+      category:     document.getElementById('f-category').value,
       vin:          document.getElementById('f-vin').value.trim(),
       ownership:    document.getElementById('f-ownership').value,
       registration: document.getElementById('f-registration').value.trim(),
@@ -231,5 +299,5 @@ const Cars = (() => {
     } catch (e) { Toast.show('Failed to delete', 'error'); }
   }
 
-  return { load, render, openAdd, openEdit, del, all: () => _cars };
+  return { load, render, setFilter, openAdd, openEdit, del, all: () => _cars };
 })();

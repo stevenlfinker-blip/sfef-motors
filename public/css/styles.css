@@ -478,6 +478,15 @@ input[type=file]::file-selector-button {
 .dash-row-meta { color: var(--text-muted); font-size: 11px; }
 .dash-row-right { text-align: right; }
 
+/* ── Fleet category tabs ── */
+.fleet-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.fleet-tab { background: var(--elevated); border: 1px solid var(--border); color: var(--text-muted); padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; }
+.fleet-tab:hover { border-color: var(--accent); color: var(--accent); }
+.fleet-tab.active { background: var(--accent); border-color: var(--accent); color: #000; }
+
+/* ── Fleet group header ── */
+.fleet-group-header { padding: 8px 12px; background: var(--elevated); border-radius: var(--radius); margin-bottom: -4px; display: flex; align-items: center; }
+
 /* ── Sortable table headers ── */
 th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
 th.sortable:hover { color: var(--accent); }

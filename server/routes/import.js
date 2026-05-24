@@ -14,9 +14,9 @@ router.post('/import', (req, res) => {
       db.prepare(`DELETE FROM sqlite_sequence WHERE name IN ('cars','maintenance','parts','tools','cleaning','expenses','events','watchlist')`).run();
     } catch (_) {}
 
-    const insertCar = db.prepare('INSERT INTO cars (id, year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertCar = db.prepare('INSERT INTO cars (id, year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     for (const r of data.cars || []) {
-      insertCar.run(r.id, r.year, r.make, r.model, r.color||'', r.mileage||'', r.status||'Active', r.notes||'', r.vin||'', r.ownership||'', r.registration||'', r.insurance||'', r.value||0);
+      insertCar.run(r.id, r.year, r.make, r.model, r.color||'', r.mileage||'', r.status||'Active', r.notes||'', r.vin||'', r.ownership||'', r.registration||'', r.insurance||'', r.value||0, r.category||'Daily');
     }
 
     const insertMaint = db.prepare('INSERT INTO maintenance (id, car_id, title, description, due_date, due_mileage, completed, completed_date, cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');

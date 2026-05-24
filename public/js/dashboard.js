@@ -95,7 +95,8 @@ const Dashboard = (() => {
   // ── Widget: HUD Header + Stat Cards ──────────────
   function hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist) {
     const yr         = new Date().getFullYear();
-    const totalValue = cars.reduce((s, c) => s + (c.value || 0), 0);
+    const ownedCars  = cars.filter(c => c.category !== 'Lease');
+    const totalValue = ownedCars.reduce((s, c) => s + (c.value || 0), 0);
     const active     = cars.filter(c => c.status === 'Active').length;
     const restoration = cars.filter(c => c.status === 'Restoration').length;
     const topCar     = [...cars].sort((a, b) => (b.value || 0) - (a.value || 0))[0];
@@ -397,38 +398,58 @@ const Dashboard = (() => {
     </div>`;
   }
 
-  // ── Widget: Collection Value ──────────────────────
-  function collectionValueWidget(cars) {
-    const valued = cars.filter(c => c.value > 0).sort((a,b) => b.value - a.value);
-    const total = valued.reduce((s, c) => s + c.value, 0);
-    const unvalued = cars.length - valued.length;
-    const maxVal = Math.max(...valued.map(c => c.value), 1);
+  // ── Widget helpers: per-category value panel ─────
+  function _fleetValuePanel(title, accentVar, sectionCars, maxVal) {
+    const valued   = sectionCars.filter(c => c.value > 0).sort((a, b) => b.value - a.value);
+    const total    = valued.reduce((s, c) => s + c.value, 0);
+    const unvalued = sectionCars.length - valued.length;
 
     const rows = valued.map(c => {
       const pct = Math.min(100, (c.value / maxVal) * 100).toFixed(1);
       return `<div style="padding:5px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px">
           <span style="font-size:11px;color:var(--text)">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</span>
-          <span style="font-size:11px;color:var(--accent);font-weight:600">${fmt$(c.value)}</span>
+          <span style="font-size:11px;color:${accentVar};font-weight:600">${fmt$(c.value)}</span>
         </div>
         <div class="value-bar-track">
-          <div class="value-bar-fill" style="width:${pct}%"></div>
+          <div class="value-bar-fill" style="width:${pct}%;background:${accentVar}"></div>
         </div>
       </div>`;
     }).join('');
 
-    const note = unvalued > 0 ? `<div style="font-size:10px;color:var(--text-muted);margin-top:8px">${unvalued} car${unvalued>1?'s':''} without estimated value — add via Cars → Edit</div>` : '';
+    const note = unvalued > 0
+      ? `<div style="font-size:10px;color:var(--text-muted);margin-top:8px">${unvalued} car${unvalued>1?'s':''} without value set</div>`
+      : '';
+
+    const empty = sectionCars.length === 0
+      ? `<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No cars in this category.</div>`
+      : (!rows ? `<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No values set — edit a car to add one.</div>` : '');
 
     return `<div class="dash-panel">
       <div class="dash-panel-header">
-        <span class="dash-panel-title">Collection Value</span>
-        <span style="font-size:12px;font-weight:700;color:var(--accent)">${fmt$(total)}</span>
+        <span class="dash-panel-title" style="color:${accentVar}">${title}</span>
+        <span style="font-size:13px;font-weight:700;color:${accentVar}">${fmt$(total)}</span>
       </div>
       <div class="dash-panel-body" style="padding:4px 0 0">
-        ${rows || '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No estimated values set. Edit a car to add one.</div>'}
-        ${note}
+        ${rows}${empty}${note}
       </div>
     </div>`;
+  }
+
+  // ── Widget: Collection Value ──────────────────────
+  function collectionValueWidget(cars) {
+    const ownedCars  = cars.filter(c => c.category !== 'Lease');
+    const maxVal     = Math.max(...ownedCars.filter(c => c.value > 0).map(c => c.value), 1);
+    const collectables = ownedCars.filter(c => c.category === 'Collectable');
+    return _fleetValuePanel('⭐ Collection', 'var(--accent)', collectables, maxVal);
+  }
+
+  // ── Widget: Daily Fleet Value ─────────────────────
+  function dailyFleetValueWidget(cars) {
+    const ownedCars = cars.filter(c => c.category !== 'Lease');
+    const maxVal    = Math.max(...ownedCars.filter(c => c.value > 0).map(c => c.value), 1);
+    const dailies   = ownedCars.filter(c => c.category === 'Daily');
+    return _fleetValuePanel('Daily Drivers', 'var(--blue)', dailies, maxVal);
   }
 
   // ── Widget: Upcoming Events ───────────────────────
@@ -607,8 +628,9 @@ const Dashboard = (() => {
         '<div class="dash-full">' + watchlistWidget(watchlist) + '</div>' +
         '<div class="dash-grid-2">' +
           collectionValueWidget(cars) +
-          upcomingEventsWidget(events) +
+          dailyFleetValueWidget(cars) +
         '</div>' +
+        '<div class="dash-full">' + upcomingEventsWidget(events) + '</div>' +
         '<div class="dash-full">' + pendingMaintWidget(maint) + '</div>';
       startHudClock();
     } catch (err) {

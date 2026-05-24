@@ -16,6 +16,13 @@ try { db.exec('ALTER TABLE costs RENAME TO expenses'); } catch (e) { /* already 
 try { db.exec("ALTER TABLE expenses ADD COLUMN vendor TEXT DEFAULT ''"); } catch (e) { /* already exists */ }
 // One-time migration: add expense_type column to expenses
 try { db.exec("ALTER TABLE expenses ADD COLUMN expense_type TEXT DEFAULT ''"); } catch (e) { /* already exists */ }
+// One-time migration: add category column to cars
+try { db.exec("ALTER TABLE cars ADD COLUMN category TEXT DEFAULT 'Daily'"); } catch (e) { /* already exists */ }
+// Set known categories for existing cars
+try {
+  db.exec("UPDATE cars SET category='Collectable' WHERE (make='Porsche' AND model NOT LIKE '%Macan%') OR (make='Ferrari') OR (make='Ford' AND year < 1980)");
+  db.exec("UPDATE cars SET category='Lease' WHERE ownership='Lease'");
+} catch (e) { /* already set */ }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS cars (
@@ -31,7 +38,8 @@ db.exec(`
     ownership TEXT DEFAULT '',
     registration TEXT DEFAULT '',
     insurance TEXT DEFAULT '',
-    value REAL DEFAULT 0
+    value REAL DEFAULT 0,
+    category TEXT DEFAULT 'Daily'
   );
 
   CREATE TABLE IF NOT EXISTS maintenance (
