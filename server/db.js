@@ -10,6 +10,9 @@ const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 
+// One-time migration: add purchase_price column to cars
+try { db.exec("ALTER TABLE cars ADD COLUMN purchase_price REAL DEFAULT 0"); } catch (e) { /* already exists */ }
+
 // One-time migration: add sources column to car_valuations
 try { db.exec("ALTER TABLE car_valuations ADD COLUMN sources TEXT DEFAULT '[]'"); } catch (e) { /* already exists */ }
 

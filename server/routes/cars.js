@@ -13,18 +13,18 @@ router.get('/:id', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value, category } = req.body;
+  const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value, category, purchase_price } = req.body;
   const result = db.prepare(
-    'INSERT INTO cars (year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(year, make, model, color||'', mileage||'', status||'Active', notes||'', vin||'', ownership||'', registration||'', insurance||'', value||0, category||'Daily');
+    'INSERT INTO cars (year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value, category, purchase_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(year, make, model, color||'', mileage||'', status||'Active', notes||'', vin||'', ownership||'', registration||'', insurance||'', value||0, category||'Daily', purchase_price||0);
   res.status(201).json(db.prepare('SELECT * FROM cars WHERE id = ?').get(result.lastInsertRowid));
 });
 
 router.put('/:id', (req, res) => {
-  const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value, category } = req.body;
+  const { year, make, model, color, mileage, status, notes, vin, ownership, registration, insurance, value, category, purchase_price } = req.body;
   db.prepare(
-    'UPDATE cars SET year=?, make=?, model=?, color=?, mileage=?, status=?, notes=?, vin=?, ownership=?, registration=?, insurance=?, value=?, category=? WHERE id=?'
-  ).run(year, make, model, color||'', mileage||'', status||'Active', notes||'', vin||'', ownership||'', registration||'', insurance||'', value||0, category||'Daily', req.params.id);
+    'UPDATE cars SET year=?, make=?, model=?, color=?, mileage=?, status=?, notes=?, vin=?, ownership=?, registration=?, insurance=?, value=?, category=?, purchase_price=? WHERE id=?'
+  ).run(year, make, model, color||'', mileage||'', status||'Active', notes||'', vin||'', ownership||'', registration||'', insurance||'', value||0, category||'Daily', purchase_price||0, req.params.id);
   res.json(db.prepare('SELECT * FROM cars WHERE id = ?').get(req.params.id));
 });
 

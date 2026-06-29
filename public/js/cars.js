@@ -12,9 +12,14 @@ const Cars = (() => {
     Lease:       { label: 'Leases',         color: 'var(--purple)',  dim: 'var(--purple-dim)' },
   };
 
+  let _valuations = {};
+
   async function load() {
     try {
-      _cars = await API.get('/api/cars');
+      [_cars] = await Promise.all([API.get('/api/cars')]);
+      const vals = await API.get('/api/market').catch(() => []);
+      _valuations = {};
+      vals.forEach(v => { _valuations[v.car_id] = v; });
       render();
     } catch (e) { Toast.show('Failed to load cars', 'error'); }
   }
@@ -136,6 +141,35 @@ const Cars = (() => {
     return `<span class="badge" style="background:${m.dim};color:${m.color};font-size:9px;letter-spacing:.5px">${escHtml(m.label)}</span>`;
   }
 
+  function _valuePriceBlock(c) {
+    const paid = c.purchase_price || 0;
+    const v = _valuations[c.id];
+    const market = v?.avg || 0;
+    if (!paid && !market) return '';
+
+    const hasBoth = paid > 0 && market > 0;
+    const delta = hasBoth ? market - paid : null;
+    const deltaColor = delta === null ? '' : delta >= 0 ? 'var(--green)' : 'var(--red)';
+    const deltaSign  = delta !== null && delta >= 0 ? '+' : '';
+
+    return `<div style="margin-top:8px;padding:8px;background:var(--elevated);border-radius:6px;border-top:1px solid var(--border)">
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        ${paid ? `<div style="flex:1;min-width:80px">
+          <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Paid</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${fmt$(paid)}</div>
+        </div>` : ''}
+        ${market ? `<div style="flex:1;min-width:80px">
+          <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Market Avg</div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent)">${fmt$(market)}</div>
+        </div>` : ''}
+        ${delta !== null ? `<div style="flex:1;min-width:80px">
+          <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">Gain / Loss</div>
+          <div style="font-size:13px;font-weight:700;color:${deltaColor}">${deltaSign}${fmt$(delta)}</div>
+        </div>` : ''}
+      </div>
+    </div>`;
+  }
+
   function carCard(c) {
     return `
       <div class="car-card">
@@ -160,6 +194,7 @@ const Cars = (() => {
           ${c.vin ? `<div class="car-card-row"><span class="car-card-row-label">VIN</span><span class="car-card-row-value" style="font-size:10px;font-family:monospace">${escHtml(c.vin)}</span></div>` : ''}
           ${expiryPill('Registration', c.registration)}
           ${expiryPill('Insurance', c.insurance)}
+          ${_valuePriceBlock(c)}
           ${c.notes ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted)">${escHtml(c.notes)}</div>` : ''}
         </div>
         <div class="car-card-footer">
@@ -226,9 +261,15 @@ const Cars = (() => {
           <input type="text" id="f-insurance" value="${escHtml(c.insurance || '')}" placeholder="MM/DD/YYYY">
         </div>
       </div>
-      <div class="form-row">
-        <label>Estimated Value ($)</label>
-        <input type="number" id="f-value" value="${c.value || ''}" placeholder="0" min="0" step="100">
+      <div class="form-row-2">
+        <div class="form-row">
+          <label>Price Paid ($)</label>
+          <input type="number" id="f-purchase-price" value="${c.purchase_price || ''}" placeholder="0" min="0" step="100">
+        </div>
+        <div class="form-row">
+          <label>Stored Value ($)</label>
+          <input type="number" id="f-value" value="${c.value || ''}" placeholder="0" min="0" step="100">
+        </div>
       </div>
       <div class="form-row">
         <label>Notes</label>
@@ -249,6 +290,7 @@ const Cars = (() => {
       ownership:    document.getElementById('f-ownership').value,
       registration: document.getElementById('f-registration').value.trim(),
       insurance:    document.getElementById('f-insurance').value.trim(),
+      purchase_price: parseFloat(document.getElementById('f-purchase-price').value) || 0,
       value:        parseFloat(document.getElementById('f-value').value) || 0,
       notes:        document.getElementById('f-notes').value.trim(),
     };

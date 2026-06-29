@@ -93,10 +93,13 @@ const Dashboard = (() => {
   }
 
   // ── Widget: HUD Header + Stat Cards ──────────────
-  function hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist) {
+  function hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist, valuationMap = {}) {
     const yr         = new Date().getFullYear();
     const ownedCars  = cars.filter(c => c.category !== 'Lease');
     const totalValue = ownedCars.reduce((s, c) => s + (c.value || 0), 0);
+    const totalPaid   = ownedCars.reduce((s, c) => s + (c.purchase_price || 0), 0);
+    const totalMarket = ownedCars.reduce((s, c) => s + (valuationMap[c.id]?.avg || 0), 0);
+    const portfolioDelta = totalPaid > 0 && totalMarket > 0 ? totalMarket - totalPaid : null;
     const active     = cars.filter(c => c.status === 'Active').length;
     const restoration = cars.filter(c => c.status === 'Restoration').length;
     const topCar     = [...cars].sort((a, b) => (b.value || 0) - (a.value || 0))[0];
@@ -138,7 +141,13 @@ const Dashboard = (() => {
         </div>
       </div>
       <div class="hud-cards">
-        ${card('#facc15', 'FLEET VALUE',    fmt$(totalValue),  `${cars.length} vehicle${cars.length !== 1 ? 's' : ''}`, 'Est. Market ' + yr)}
+        ${card('#facc15', 'FLEET VALUE',
+          totalMarket > 0 ? fmt$(totalMarket) : fmt$(totalValue),
+          totalPaid > 0 ? `Paid ${fmt$(totalPaid)}` : `${cars.length} vehicle${cars.length !== 1?'s':''}`,
+          portfolioDelta !== null
+            ? (portfolioDelta >= 0 ? `▲ +${fmt$(portfolioDelta)} gain` : `▼ ${fmt$(portfolioDelta)} loss`)
+            : 'Est. Market ' + yr
+        )}
         ${card('#00e5a0', 'ACTIVE FLEET',   String(active),    `${restoration} in restoration`, 'Operational')}
         ${card('#00d4ff', 'TOP ASSET',      topCar ? escHtml(topCar.make + ' ' + topCar.model) : '—', topCar ? escHtml(String(topCar.year || '')) : 'No cars', topCar && topCar.value ? fmt$(topCar.value) : '—')}
         ${card('#ff6a00', 'YTD SPENDING',   fmt$(ytdTotal),    `${ytdCosts.length} expense${ytdCosts.length !== 1 ? 's' : ''} in ${yr}`, ytdCosts.length === 0 ? 'Add expenses →' : 'This calendar year')}
@@ -399,17 +408,32 @@ const Dashboard = (() => {
   }
 
   // ── Widget helpers: per-category value panel ─────
-  function _fleetValuePanel(title, accentVar, sectionCars, maxVal) {
-    const valued   = sectionCars.filter(c => c.value > 0).sort((a, b) => b.value - a.value);
-    const total    = valued.reduce((s, c) => s + c.value, 0);
+  function _fleetValuePanel(title, accentVar, sectionCars, maxVal, valuationMap = {}) {
+    const valued   = sectionCars.filter(c => c.value > 0 || c.purchase_price > 0 || valuationMap[c.id]).sort((a, b) => {
+      const aM = valuationMap[a.id]?.avg || a.value || 0;
+      const bM = valuationMap[b.id]?.avg || b.value || 0;
+      return bM - aM;
+    });
+    const totalMarket = valued.reduce((s, c) => s + (valuationMap[c.id]?.avg || c.value || 0), 0);
+    const totalPaid   = valued.reduce((s, c) => s + (c.purchase_price || 0), 0);
     const unvalued = sectionCars.length - valued.length;
 
     const rows = valued.map(c => {
-      const pct = Math.min(100, (c.value / maxVal) * 100).toFixed(1);
-      return `<div style="padding:5px 0;border-bottom:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-          <span style="font-size:11px;color:var(--text)">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</span>
-          <span style="font-size:11px;color:${accentVar};font-weight:600">${fmt$(c.value)}</span>
+      const market = valuationMap[c.id]?.avg || c.value || 0;
+      const paid   = c.purchase_price || 0;
+      const pct    = Math.min(100, (market / maxVal) * 100).toFixed(1);
+      const delta  = paid > 0 && market > 0 ? market - paid : null;
+      const deltaColor = delta === null ? '' : delta >= 0 ? 'var(--green)' : 'var(--red)';
+      const deltaSign  = delta !== null && delta >= 0 ? '+' : '';
+
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
+          <span style="font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</span>
+          <div style="text-align:right;flex-shrink:0">
+            <span style="font-size:12px;color:${accentVar};font-weight:600">${market ? fmt$(market) : '—'}</span>
+            ${paid ? `<span style="font-size:10px;color:var(--text-muted);margin-left:6px">pd ${fmt$(paid)}</span>` : ''}
+            ${delta !== null ? `<span style="font-size:10px;font-weight:600;color:${deltaColor};margin-left:4px">${deltaSign}${fmt$(delta)}</span>` : ''}
+          </div>
         </div>
         <div class="value-bar-track">
           <div class="value-bar-fill" style="width:${pct}%;background:${accentVar}"></div>
@@ -421,6 +445,10 @@ const Dashboard = (() => {
       ? `<div style="font-size:10px;color:var(--text-muted);margin-top:8px">${unvalued} car${unvalued>1?'s':''} without value set</div>`
       : '';
 
+    const headerSub = totalPaid > 0
+      ? `<span style="font-size:10px;color:var(--text-muted);margin-left:8px">pd ${fmt$(totalPaid)}</span>`
+      : '';
+
     const empty = sectionCars.length === 0
       ? `<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No cars in this category.</div>`
       : (!rows ? `<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No values set — edit a car to add one.</div>` : '');
@@ -428,7 +456,7 @@ const Dashboard = (() => {
     return `<div class="dash-panel">
       <div class="dash-panel-header">
         <span class="dash-panel-title" style="color:${accentVar}">${title}</span>
-        <span style="font-size:13px;font-weight:700;color:${accentVar}">${fmt$(total)}</span>
+        <span style="font-size:13px;font-weight:700;color:${accentVar}">${fmt$(totalMarket)}${headerSub}</span>
       </div>
       <div class="dash-panel-body" style="padding:4px 0 0">
         ${rows}${empty}${note}
@@ -437,19 +465,19 @@ const Dashboard = (() => {
   }
 
   // ── Widget: Collection Value ──────────────────────
-  function collectionValueWidget(cars) {
+  function collectionValueWidget(cars, valuationMap = {}) {
     const ownedCars  = cars.filter(c => c.category !== 'Lease');
-    const maxVal     = Math.max(...ownedCars.filter(c => c.value > 0).map(c => c.value), 1);
+    const maxVal     = Math.max(...ownedCars.map(c => valuationMap[c.id]?.avg || c.value || 0), 1);
     const collectables = ownedCars.filter(c => c.category === 'Collectable');
-    return _fleetValuePanel('⭐ Collection', 'var(--accent)', collectables, maxVal);
+    return _fleetValuePanel('⭐ Collection', 'var(--accent)', collectables, maxVal, valuationMap);
   }
 
   // ── Widget: Daily Fleet Value ─────────────────────
-  function dailyFleetValueWidget(cars) {
+  function dailyFleetValueWidget(cars, valuationMap = {}) {
     const ownedCars = cars.filter(c => c.category !== 'Lease');
-    const maxVal    = Math.max(...ownedCars.filter(c => c.value > 0).map(c => c.value), 1);
+    const maxVal    = Math.max(...ownedCars.map(c => valuationMap[c.id]?.avg || c.value || 0), 1);
     const dailies   = ownedCars.filter(c => c.category === 'Daily');
-    return _fleetValuePanel('Daily Drivers', 'var(--blue)', dailies, maxVal);
+    return _fleetValuePanel('Daily Drivers', 'var(--blue)', dailies, maxVal, valuationMap);
   }
 
   // ── Widget: Upcoming Events ───────────────────────
@@ -606,7 +634,7 @@ const Dashboard = (() => {
   async function load() {
     const el = document.getElementById('dashboard-content');
     try {
-      const [cars, maint, parts, tools, cleaning, costs, events, watchlist] = await Promise.all([
+      const [cars, maint, parts, tools, cleaning, costs, events, watchlist, marketVals] = await Promise.all([
         API.get('/api/cars'),
         API.get('/api/maintenance'),
         API.get('/api/parts'),
@@ -615,10 +643,13 @@ const Dashboard = (() => {
         API.get('/api/expenses'),
         API.get('/api/events'),
         API.get('/api/watchlist'),
+        API.get('/api/market').catch(() => []),
       ]);
+      const valuationMap = {};
+      marketVals.forEach(v => { valuationMap[v.car_id] = v; });
 
       el.innerHTML =
-        hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist) +
+        hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist, valuationMap) +
         '<div class="dash-grid-2-wide" style="margin-top:12px">' +
           monthlySpendWidget(costs) +
           spendByCatWidget(costs) +
@@ -627,8 +658,8 @@ const Dashboard = (() => {
         mileageTrackerWidget(cars) +
         '<div class="dash-full">' + watchlistWidget(watchlist) + '</div>' +
         '<div class="dash-grid-2">' +
-          collectionValueWidget(cars) +
-          dailyFleetValueWidget(cars) +
+          collectionValueWidget(cars, valuationMap) +
+          dailyFleetValueWidget(cars, valuationMap) +
         '</div>' +
         '<div class="dash-full">' + upcomingEventsWidget(events) + '</div>' +
         '<div class="dash-full">' + pendingMaintWidget(maint) + '</div>';
