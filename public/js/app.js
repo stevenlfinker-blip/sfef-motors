@@ -44,6 +44,7 @@ const SECTION_TITLES = {
   dashboard:   'Dashboard',
   cars:        'Fleet · Cars',
   maintenance: 'Fleet · Maintenance',
+  market:      'Fleet · Market Analytics',
   parts:       'Inventory · Parts',
   tools:       'Inventory · Tools',
   cleaning:    'Inventory · Cleaning',
@@ -111,6 +112,7 @@ const App = {
       case 'tools':       Tools.load(); break;
       case 'cleaning':    Cleaning.load(); break;
       case 'other':       Other.load(); break;
+      case 'market':      Market.load(); break;
       case 'expenses':    Expenses.load(); break;
       case 'events':      Events.load(); break;
     }

@@ -121,6 +121,18 @@ db.exec(`
     notes TEXT DEFAULT ''
   );
 
+  CREATE TABLE IF NOT EXISTS car_valuations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    car_id INTEGER NOT NULL,
+    low REAL,
+    avg REAL,
+    high REAL,
+    trend TEXT DEFAULT '',
+    market_note TEXT DEFAULT '',
+    fetched_at TEXT NOT NULL,
+    FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS watchlist (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     year TEXT DEFAULT '',

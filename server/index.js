@@ -131,6 +131,7 @@ app.use('/api/parts', require('./routes/parts'));
 app.use('/api/tools', require('./routes/tools'));
 app.use('/api/cleaning', require('./routes/cleaning'));
 app.use('/api/other', require('./routes/other'));
+app.use('/api/market', require('./routes/market'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/watchlist', require('./routes/watchlist'));
