@@ -72,8 +72,11 @@ router.post('/parse-receipt', parseUpload.single('receipt'), async (req, res) =>
           {
             type: 'text',
             text: 'Extract the following fields from this receipt/invoice and respond with ONLY a JSON object, no other text: ' +
-              '{"vendor": string, "amount": number (total paid, no currency symbol), "date": string in YYYY-MM-DD format, ' +
-              '"description": short string summarizing what was purchased}. If a field cannot be determined, use null for it.',
+              '{"vendor": string, "amount": number, "date": string in YYYY-MM-DD format, ' +
+              '"description": short string summarizing what was purchased}. ' +
+              'For "amount": use the TOTAL or GRAND TOTAL line (the full purchase amount before any payment method is applied). ' +
+              'Do NOT use DEBIT, CASH, CREDIT, CHANGE, or TENDERED amounts — those are payment method lines, not the purchase total. ' +
+              'Return the number only, no currency symbol. If a field cannot be determined, use null.',
           },
         ],
       }],
