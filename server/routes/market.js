@@ -128,6 +128,9 @@ Based on these real-world data points, respond with ONLY a JSON object, no other
       'INSERT INTO car_valuations (car_id, low, avg, high, trend, market_note, sources, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(car.id, v.low, v.avg, v.high, v.trend || '', v.market_note || '', JSON.stringify(sources), now);
 
+    // Keep stored value in sync with market avg
+    db.prepare('UPDATE cars SET value = ? WHERE id = ?').run(v.avg, car.id);
+
     res.json(db.prepare('SELECT * FROM car_valuations WHERE id = ?').get(result.lastInsertRowid));
   } catch (err) {
     console.error('Valuation error:', err.message);
