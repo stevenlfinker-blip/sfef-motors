@@ -87,6 +87,7 @@ const Market = (() => {
         ${delta !== null ? `<span style="font-size:12px;font-weight:600;color:${deltaColor}">${deltaSign}${fmt$(delta)} vs stored</span>` : ''}
       </div>
       ${v.market_note ? `<div style="margin-top:8px;font-size:11px;color:var(--text-muted);font-style:italic">${escHtml(v.market_note)}</div>` : ''}
+      ${_sourcesHtml(v.sources)}
       <div style="margin-top:6px;font-size:10px;color:var(--text-muted)">Updated ${_relTime(v.fetched_at)}</div>` :
       `<div style="padding:16px 0;text-align:center;color:var(--text-muted);font-size:12px">No valuation yet</div>`;
 
@@ -154,6 +155,18 @@ const Market = (() => {
     }
     if (btn) { btn.disabled = false; btn.textContent = '⟳ Refresh All'; }
     Toast.show('All valuations updated');
+  }
+
+  function _sourcesHtml(sourcesJson) {
+    let sources = [];
+    try { sources = JSON.parse(sourcesJson || '[]'); } catch (_) {}
+    if (!sources.length) return '';
+    return `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+      <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Sources</div>
+      ${sources.map(s => `<div style="font-size:10px;margin-bottom:2px">
+        <a href="${escHtml(s.url)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none" title="${escHtml(s.url)}">${escHtml(s.title?.slice(0, 60) || s.url)}</a>
+      </div>`).join('')}
+    </div>`;
   }
 
   function _relTime(iso) {

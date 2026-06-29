@@ -10,6 +10,9 @@ const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL');
 db.exec('PRAGMA foreign_keys = ON');
 
+// One-time migration: add sources column to car_valuations
+try { db.exec("ALTER TABLE car_valuations ADD COLUMN sources TEXT DEFAULT '[]'"); } catch (e) { /* already exists */ }
+
 // One-time migration: rename costs → expenses
 try { db.exec('ALTER TABLE costs RENAME TO expenses'); } catch (e) { /* already done or doesn't exist */ }
 // One-time migration: add vendor column to expenses
@@ -129,6 +132,7 @@ db.exec(`
     high REAL,
     trend TEXT DEFAULT '',
     market_note TEXT DEFAULT '',
+    sources TEXT DEFAULT '[]',
     fetched_at TEXT NOT NULL,
     FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE
   );
