@@ -61,6 +61,11 @@
         <span class="nav-label">Cleaning</span>
         <span class="nav-badge" id="badge-cleaning">0</span>
       </div>
+      <div class="nav-item" data-section="other">
+        <span class="nav-icon">◇</span>
+        <span class="nav-label">Other</span>
+        <span class="nav-badge" id="badge-other">0</span>
+      </div>
 
       <div class="nav-section-label">Finances & Events</div>
       <div class="nav-item" data-section="expenses">
@@ -261,13 +266,39 @@
       </div>
     </section>
 
+    <!-- Other -->
+    <section id="section-other" class="section">
+      <div class="section-header">
+        <div class="section-title">Inventory <span>/ Other</span></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="Other.openAdd()">+ Add Item</button>
+        </div>
+      </div>
+      <div class="filters-bar">
+        <input class="search-input" id="other-search" placeholder="Search items…" oninput="Other.render()">
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Notes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="other-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- Expenses -->
     <section id="section-expenses" class="section">
       <div class="section-header">
         <div class="section-title">Finances <span>/ Expenses</span></div>
         <div class="section-actions">
           <button class="btn btn-ghost" onclick="Expenses.exportQB()">↓ QuickBooks CSV</button>
-          <button class="btn btn-primary" onclick="Expenses.openAdd()">+ Add Entry</button>
+          <button class="btn btn-primary" onclick="Expenses.openScanReceipt()">📷 Scan Receipt</button>
+          <button class="btn btn-primary" onclick="Expenses.openAdd()">+ Manual Entry</button>
         </div>
       </div>
       <div id="expense-summary-row"></div>
@@ -385,6 +416,7 @@
 <script src="/js/parts.js"></script>
 <script src="/js/tools.js"></script>
 <script src="/js/cleaning.js"></script>
+<script src="/js/other.js"></script>
 <script src="/js/expenses.js"></script>
 <script src="/js/events.js"></script>
 

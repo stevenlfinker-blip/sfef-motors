@@ -238,6 +238,122 @@ const Expenses = (() => {
       </div>`;
   }
 
+  let _scanFile = null;
+
+  function _scanFieldsHtml(fields = {}) {
+    const typeOpts = TYPES.map(t => `<option value="${t.value}" ${fields.expense_type === t.value ? 'selected':''}>${t.label}</option>`).join('');
+    const catOpts  = _catOpts(fields.expense_type, fields.category);
+    return `
+      <div class="form-row">
+        <label>Description *</label>
+        <input type="text" id="sf-desc" value="${escHtml(fields.description || '')}" placeholder="Oil change, Brake service…">
+      </div>
+      <div class="form-row-2">
+        <div class="form-row">
+          <label>Vendor</label>
+          <input type="text" id="sf-vendor" value="${escHtml(fields.vendor || '')}">
+        </div>
+        <div class="form-row">
+          <label>Amount ($) *</label>
+          <input type="number" id="sf-amount" value="${fields.amount ?? ''}" step="0.01" min="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Date</label>
+        <input type="date" id="sf-date" value="${fields.date || today()}">
+      </div>
+      <div class="form-row-2">
+        <div class="form-row">
+          <label>Expense Allocation (Type) *</label>
+          <select id="sf-type" onchange="Expenses._onScanTypeChange(this.value)">
+            <option value="">— Select Type —</option>${typeOpts}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Category</label>
+          <select id="sf-category"><option value="">— Select —</option>${catOpts}</select>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Vehicle Allocation</label>
+        <select id="sf-car"><option value="">— General (No Car) —</option>${_carOpts()}</select>
+      </div>
+      <div class="form-row">
+        <label>Notes</label>
+        <textarea id="sf-notes"></textarea>
+      </div>`;
+  }
+
+  function _onScanTypeChange(typeVal) {
+    const catSel = document.getElementById('sf-category');
+    if (!catSel) return;
+    const curCat = catSel.value;
+    catSel.innerHTML = '<option value="">— Select —</option>' + _catOpts(typeVal, curCat);
+  }
+
+  function openScanReceipt() {
+    _scanFile = null;
+    Modal.show('Scan Receipt', `
+      <div class="form-row">
+        <label>Receipt Photo / PDF</label>
+        <input type="file" id="scan-file-input" accept="image/jpeg,image/png,image/gif,image/webp,.pdf" onchange="Expenses._handleScanFile(this)">
+        <div id="scan-status" style="font-size:12px;color:var(--text-muted);margin-top:6px">Choose a receipt — the fields below will fill in automatically.</div>
+      </div>
+      <div id="scan-fields"></div>
+    `, async () => {
+      const desc   = document.getElementById('sf-desc')?.value.trim();
+      const amount = document.getElementById('sf-amount')?.value;
+      const type   = document.getElementById('sf-type')?.value;
+      if (!desc || !type || !amount) {
+        Toast.show('Scan a receipt and fill in description, amount, and type', 'error');
+        return;
+      }
+      try {
+        const fd = new FormData();
+        fd.append('expense_type', type);
+        fd.append('description', desc);
+        fd.append('vendor', document.getElementById('sf-vendor').value.trim());
+        fd.append('amount', amount);
+        fd.append('date', document.getElementById('sf-date').value);
+        fd.append('category', document.getElementById('sf-category').value);
+        fd.append('car_id', document.getElementById('sf-car').value || '');
+        fd.append('notes', document.getElementById('sf-notes').value.trim());
+        if (_scanFile) fd.append('receipt', _scanFile);
+        const item = await API.post('/api/expenses', fd);
+        _items.unshift(item);
+        renderSummary();
+        render();
+        Modal.hide();
+        Toast.show('Expense added from receipt');
+      } catch (e) { Toast.show('Failed to save', 'error'); }
+    }, { submitLabel: 'Save Expense' });
+  }
+
+  async function _handleScanFile(input) {
+    const file = input.files[0];
+    const status = document.getElementById('scan-status');
+    const fieldsEl = document.getElementById('scan-fields');
+    if (!file) { fieldsEl.innerHTML = ''; return; }
+    _scanFile = file;
+
+    status.style.color = 'var(--text-muted)';
+    status.textContent = 'Scanning receipt…';
+    fieldsEl.innerHTML = '';
+
+    try {
+      const fd = new FormData();
+      fd.append('receipt', file);
+      const parsed = await API.post('/api/expenses/parse-receipt', fd);
+      status.style.color = 'var(--accent)';
+      status.textContent = '✓ Scanned — review the fields below before saving';
+      fieldsEl.innerHTML = _scanFieldsHtml(parsed);
+    } catch (e) {
+      status.style.color = 'var(--red)';
+      status.textContent = 'Could not auto-read this receipt. Enter the details manually below.';
+      fieldsEl.innerHTML = _scanFieldsHtml({});
+    }
+  }
+
   function _removeReceipt() {
     const el = document.getElementById('current-receipt');
     if (el) el.style.display = 'none';
@@ -352,5 +468,5 @@ const Expenses = (() => {
     Toast.show('QuickBooks CSV downloaded');
   }
 
-  return { load, render, openAdd, openEdit, del, exportQB, clearFilters, _setSort, _onTypeChange, _removeReceipt };
+  return { load, render, openAdd, openEdit, del, exportQB, clearFilters, _setSort, _onTypeChange, _removeReceipt, openScanReceipt, _handleScanFile, _onScanTypeChange };
 })();

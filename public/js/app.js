@@ -47,6 +47,7 @@ const SECTION_TITLES = {
   parts:       'Inventory · Parts',
   tools:       'Inventory · Tools',
   cleaning:    'Inventory · Cleaning',
+  other:       'Inventory · Other',
   expenses:    'Finances · Expenses',
   events:      'Schedule · Events',
 };
@@ -109,6 +110,7 @@ const App = {
       case 'parts':       Parts.load(); break;
       case 'tools':       Tools.load(); break;
       case 'cleaning':    Cleaning.load(); break;
+      case 'other':       Other.load(); break;
       case 'expenses':    Expenses.load(); break;
       case 'events':      Events.load(); break;
     }
@@ -123,19 +125,21 @@ const App = {
 
   async refreshBadges() {
     try {
-      const [cars, maint, parts, tools, cleaning, events] = await Promise.all([
+      const [cars, maint, parts, tools, cleaning, events, other] = await Promise.all([
         API.get('/api/cars'),
         API.get('/api/maintenance'),
         API.get('/api/parts'),
         API.get('/api/tools'),
         API.get('/api/cleaning'),
         API.get('/api/events'),
+        API.get('/api/other'),
       ]);
       document.getElementById('badge-cars').textContent = cars.length;
       document.getElementById('badge-maintenance').textContent = maint.filter(m => !m.completed).length;
       document.getElementById('badge-parts').textContent = parts.length;
       document.getElementById('badge-tools').textContent = tools.length;
       document.getElementById('badge-cleaning').textContent = cleaning.length;
+      document.getElementById('badge-other').textContent = other.length;
       document.getElementById('badge-events').textContent = events.filter(e => {
         const d = daysUntil(e.date);
         return d !== null && d >= 0;

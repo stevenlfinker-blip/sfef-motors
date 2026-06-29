@@ -4,6 +4,14 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const db = require('../db');
+const Anthropic = require('@anthropic-ai/sdk');
+
+const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
+const PARSEABLE_MIME = /^(image\/(jpeg|png|gif|webp)|application\/pdf)$/;
+const parseUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -39,6 +47,47 @@ const SELECT = `
 
 router.get('/', (req, res) => {
   res.json(db.prepare(SELECT + 'ORDER BY ex.date DESC, ex.id DESC').all());
+});
+
+router.post('/parse-receipt', parseUpload.single('receipt'), async (req, res) => {
+  if (!anthropic) return res.status(503).json({ error: 'ANTHROPIC_API_KEY is not configured' });
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  if (!PARSEABLE_MIME.test(req.file.mimetype)) {
+    return res.status(400).json({ error: 'AI scanning supports JPG, PNG, GIF, WebP, and PDF only' });
+  }
+
+  const isPdf = req.file.mimetype === 'application/pdf';
+  const sourceBlock = isPdf
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: req.file.buffer.toString('base64') } }
+    : { type: 'image', source: { type: 'base64', media_type: req.file.mimetype, data: req.file.buffer.toString('base64') } };
+
+  try {
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: [
+          sourceBlock,
+          {
+            type: 'text',
+            text: 'Extract the following fields from this receipt/invoice and respond with ONLY a JSON object, no other text: ' +
+              '{"vendor": string, "amount": number (total paid, no currency symbol), "date": string in YYYY-MM-DD format, ' +
+              '"description": short string summarizing what was purchased}. If a field cannot be determined, use null for it.',
+          },
+        ],
+      }],
+    });
+
+    const text = message.content.find(b => b.type === 'text')?.text || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Could not parse a receipt from the response');
+    const parsed = JSON.parse(jsonMatch[0]);
+    res.json(parsed);
+  } catch (err) {
+    console.error('Receipt parse error:', err.message);
+    res.status(500).json({ error: 'Failed to read receipt. Try a clearer image or enter details manually.' });
+  }
 });
 
 router.post('/', upload.single('receipt'), (req, res) => {

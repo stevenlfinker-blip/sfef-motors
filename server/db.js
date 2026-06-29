@@ -115,6 +115,12 @@ db.exec(`
     FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL
   );
 
+  CREATE TABLE IF NOT EXISTS other_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    notes TEXT DEFAULT ''
+  );
+
   CREATE TABLE IF NOT EXISTS watchlist (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     year TEXT DEFAULT '',
