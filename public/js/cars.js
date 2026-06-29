@@ -141,6 +141,26 @@ const Cars = (() => {
     return `<span class="badge" style="background:${m.dim};color:${m.color};font-size:9px;letter-spacing:.5px">${escHtml(m.label)}</span>`;
   }
 
+  function _relTime(iso) {
+    if (!iso) return null;
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1)   return 'just now';
+    if (mins < 60)  return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24)   return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30)  return `${days}d ago`;
+    const months = Math.floor(days / 30);
+    return `${months}mo ago`;
+  }
+
+  function _fmtDate(iso) {
+    if (!iso) return null;
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   function _valuePriceBlock(c) {
     const paid = c.purchase_price || 0;
     const v = _valuations[c.id];
@@ -151,6 +171,7 @@ const Cars = (() => {
     const delta = hasBoth ? market - paid : null;
     const deltaColor = delta === null ? '' : delta >= 0 ? 'var(--green)' : 'var(--red)';
     const deltaSign  = delta !== null && delta >= 0 ? '+' : '';
+    const updatedAt  = v?.fetched_at ? `${_fmtDate(v.fetched_at)} · ${_relTime(v.fetched_at)}` : null;
 
     return `<div style="margin-top:8px;padding:8px;background:var(--elevated);border-radius:6px;border-top:1px solid var(--border)">
       <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -167,6 +188,7 @@ const Cars = (() => {
           <div style="font-size:13px;font-weight:700;color:${deltaColor}">${deltaSign}${fmt$(delta)}</div>
         </div>` : ''}
       </div>
+      ${updatedAt ? `<div style="margin-top:6px;font-size:9px;color:var(--text-muted)">Market data: ${updatedAt}</div>` : ''}
     </div>`;
   }
 

@@ -407,6 +407,12 @@ const Dashboard = (() => {
     </div>`;
   }
 
+  function _fmtValDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   // ── Widget helpers: per-category value panel ─────
   function _fleetValuePanel(title, accentVar, sectionCars, maxVal, valuationMap = {}) {
     const valued   = sectionCars.filter(c => c.value > 0 || c.purchase_price > 0 || valuationMap[c.id]).sort((a, b) => {
@@ -438,6 +444,7 @@ const Dashboard = (() => {
         <div class="value-bar-track">
           <div class="value-bar-fill" style="width:${pct}%;background:${accentVar}"></div>
         </div>
+        ${valuationMap[c.id]?.fetched_at ? `<div style="font-size:9px;color:var(--text-muted);margin-top:2px">Updated ${_fmtValDate(valuationMap[c.id].fetched_at)}</div>` : ''}
       </div>`;
     }).join('');
 
