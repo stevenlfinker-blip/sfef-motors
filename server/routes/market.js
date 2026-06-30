@@ -92,18 +92,25 @@ router.post('/:carId', async (req, res) => {
       max_tokens: 1024,
       messages: [{
         role: 'user',
-        content: `You are an automotive market analyst. Using the live search results below, estimate the current US private-party market value for: ${carDesc}
+        content: `You are an expert collector car appraiser. Using the live search results below, determine the current US market value for: ${carDesc}
 
 LIVE SEARCH RESULTS:
 ${searchContext}
 
-Based on these real-world data points, respond with ONLY a JSON object, no other text:
+Instructions:
+- Prioritize 2025 and 2026 sales above all others — recent comps are far more relevant than older ones
+- "avg" should reflect what this car would realistically sell for TODAY at auction or private sale, not a conservative floor
+- Do not anchor to MSRP or older sales — use the most recent hammer prices and asking prices as your primary reference
+- For collectibles and appreciating cars, lean toward the upper end of recent comps
+- "low" = realistic minimum for a motivated seller; "high" = top of market for exceptional spec or provenance
+
+Respond with ONLY a JSON object, no other text:
 {
-  "low": number (conservative private-party estimate in USD, no commas or symbols),
-  "avg": number (typical market value based on recent sales),
-  "high": number (optimistic estimate for excellent condition/rare spec),
+  "low": number (realistic minimum — motivated seller, no reserve),
+  "avg": number (what this car sells for today based on recent 2025-2026 comps),
+  "high": number (top of market — exceptional spec, ultra-low miles, or strong provenance),
   "trend": one of "Appreciating" | "Stable" | "Depreciating",
-  "market_note": string (one sentence citing specific data points from the search results, e.g. recent auction prices or listing trends)
+  "market_note": string (one sentence citing the most relevant recent sales from the search results with prices and dates)
 }`,
       }],
     });
