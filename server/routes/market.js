@@ -6,7 +6,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
 const TAVILY_KEY = process.env.TAVILY_API_KEY;
 
-async function tavilySearch(query) {
+async function tavilySearch(query, advanced = false) {
   try {
     const res = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -14,8 +14,9 @@ async function tavilySearch(query) {
       body: JSON.stringify({
         api_key: TAVILY_KEY,
         query,
-        search_depth: 'basic',
-        max_results: 5,
+        search_depth: advanced ? 'advanced' : 'basic',
+        max_results: advanced ? 7 : 5,
+        include_raw_content: false,
         include_answer: false,
       }),
     });
@@ -92,9 +93,9 @@ router.post('/:carId', async (req, res) => {
   const carDesc = `${car.year} ${car.make} ${car.model}${car.color ? ` (${car.color})` : ''}${car.mileage ? `, ${car.mileage} miles` : ''}`;
 
   try {
-    // Run all searches in parallel
+    // Run all searches in parallel — BaT and RM get advanced depth for richer price data
     const queries = buildQueries(car.year, car.make, car.model);
-    const resultSets = await Promise.all(queries.map(q => tavilySearch(q)));
+    const resultSets = await Promise.all(queries.map((q, i) => tavilySearch(q, i < 4)));
 
     // Deduplicate by URL and filter to only results about this exact vehicle
     const seen = new Set();
@@ -122,15 +123,15 @@ LIVE SEARCH RESULTS:
 ${searchContext}
 
 Instructions:
-- ONLY use search results specifically about this exact vehicle — discard any result about a different make, model, or year
-- Use comps with similar mileage and spec — a 200-mile example is not a valid comp for a 10,000-mile car and vice versa
-- Use ALL specs to refine the valuation — color, mileage, VIN, condition, and notes all affect value
-- Search results cover the last 3 years (${new Date().getFullYear() - 2}–${new Date().getFullYear()}) — weight the most recent sales most heavily
-- "avg" must reflect what this car sells for RIGHT NOW based on the most recent hammer prices, not a midpoint of all-time data
-- Do NOT anchor to MSRP or depreciation curves — limited-production collectibles do not follow normal depreciation
-- If the car is clearly appreciating (rising auction results over time), the avg should reflect the current upward trajectory, not an average of old and new prices
-- Never undervalue a known appreciating collectible — use the current market ceiling as your reference, not the floor
-- "low" = what a motivated seller gets with no reserve; "high" = top of market for best spec or provenance
+1. ONLY use results about this exact make, model and year — ignore anything else
+2. Extract every specific sale price and date you can find in the results
+3. Sort those sales by date — the MOST RECENT sale is your anchor for "avg", not a midpoint
+4. If prices are rising over the 3-year window, "avg" must reflect WHERE PRICES ARE NOW, not where they were 2 years ago
+5. Older sales only show the trend direction — they must not pull "avg" downward
+6. Adjust for mileage vs comps: higher miles = modest discount, lower miles = premium
+7. Do NOT apply standard depreciation — limited-production collectibles appreciate, not depreciate
+8. "low" = most recent realistic no-reserve floor; "avg" = where this car trades TODAY; "high" = best spec, lowest miles, strongest provenance
+9. If you see recent sales above $500K, avg must be in that range — do not round down to be conservative
 
 Respond with ONLY a JSON object, no other text:
 {
