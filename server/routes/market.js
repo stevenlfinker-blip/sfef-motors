@@ -69,10 +69,22 @@ router.post('/:carId', async (req, res) => {
   const car = db.prepare('SELECT * FROM cars WHERE id = ?').get(req.params.carId);
   if (!car) return res.status(404).json({ error: 'Car not found' });
 
-  const carDesc = `${car.year} ${car.make} ${car.model}${car.color ? ` ${car.color}` : ''}${car.mileage ? `, ${car.mileage} miles` : ''}`;
+  const specs = [
+    `Year: ${car.year}`,
+    `Make: ${car.make}`,
+    `Model: ${car.model}`,
+    car.color    ? `Color: ${car.color}`        : null,
+    car.mileage  ? `Mileage: ${car.mileage}`    : null,
+    car.vin      ? `VIN: ${car.vin}`            : null,
+    car.status   ? `Status: ${car.status}`      : null,
+    car.ownership? `Ownership: ${car.ownership}`: null,
+    car.notes    ? `Notes: ${car.notes}`        : null,
+  ].filter(Boolean).join('\n');
+
+  const carDesc = `${car.year} ${car.make} ${car.model}${car.color ? ` (${car.color})` : ''}${car.mileage ? `, ${car.mileage} miles` : ''}`;
 
   try {
-    // Run all 20 searches in parallel
+    // Run all searches in parallel
     const queries = buildQueries(car.year, car.make, car.model);
     const resultSets = await Promise.all(queries.map(q => tavilySearch(q)));
 
@@ -92,25 +104,30 @@ router.post('/:carId', async (req, res) => {
       max_tokens: 1024,
       messages: [{
         role: 'user',
-        content: `You are an expert collector car appraiser. Using the live search results below, determine the current US market value for: ${carDesc}
+        content: `You are an expert collector car appraiser. Using the vehicle specs and live search results below, determine the precise current US market value for this specific car.
+
+VEHICLE SPECS:
+${specs}
 
 LIVE SEARCH RESULTS:
 ${searchContext}
 
 Instructions:
+- Use ALL specs above to refine the valuation — color, mileage, VIN, condition, and notes all affect value significantly
 - Prioritize 2025 and 2026 sales above all others — recent comps are far more relevant than older ones
-- "avg" should reflect what this car would realistically sell for TODAY at auction or private sale, not a conservative floor
+- "avg" should reflect what this exact car would realistically sell for TODAY, not a conservative floor
 - Do not anchor to MSRP or older sales — use the most recent hammer prices and asking prices as your primary reference
 - For collectibles and appreciating cars, lean toward the upper end of recent comps
+- Adjust for the specific color (some colors command premiums), mileage relative to comps, and any special notes
 - "low" = realistic minimum for a motivated seller; "high" = top of market for exceptional spec or provenance
 
 Respond with ONLY a JSON object, no other text:
 {
   "low": number (realistic minimum — motivated seller, no reserve),
-  "avg": number (what this car sells for today based on recent 2025-2026 comps),
+  "avg": number (what this exact car sells for today based on recent 2025-2026 comps),
   "high": number (top of market — exceptional spec, ultra-low miles, or strong provenance),
   "trend": one of "Appreciating" | "Stable" | "Depreciating",
-  "market_note": string (one sentence citing the most relevant recent sales from the search results with prices and dates)
+  "market_note": string (one sentence citing the most relevant recent sales with prices and dates, and noting how this car's specific specs affect value)
 }`,
       }],
     });
