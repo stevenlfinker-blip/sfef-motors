@@ -26,23 +26,41 @@ async function tavilySearch(query, advanced = false) {
   } catch (_) { return []; }
 }
 
-function buildQueries(year, make, model) {
+function buildQueries(year, make, model, category) {
   const exact = `"${year} ${make} ${model}"`;
   const car   = `${year} ${make} ${model}`;
   const now   = new Date().getFullYear();
   const range = `${now - 2} ${now - 1} ${now}`;
-  return [
-    `site:bringatrailer.com ${exact}`,
-    `site:bringatrailer.com ${car} sold`,
-    `site:rmsothebys.com ${exact}`,
-    `site:barrett-jackson.com ${exact} sold`,
-    `site:mecum.com ${exact} sold`,
-    `site:hagerty.com ${exact} value`,
-    `site:classic.com ${exact}`,
-    `site:dupont-registry.com ${exact}`,
-    `${exact} sold price auction result ${range}`,
-    `${exact} market value sale ${range}`,
-  ];
+  const isCollectable = category === 'Collectable';
+
+  if (isCollectable) {
+    return [
+      `site:bringatrailer.com ${exact}`,
+      `site:bringatrailer.com ${car} sold`,
+      `site:rmsothebys.com ${exact}`,
+      `site:barrett-jackson.com ${exact} sold`,
+      `site:mecum.com ${exact} sold`,
+      `site:hagerty.com ${exact} value`,
+      `site:classic.com ${exact}`,
+      `site:dupont-registry.com ${exact}`,
+      `${exact} sold auction hammer price ${range}`,
+      `${exact} collector car market value ${range}`,
+    ];
+  } else {
+    // Daily drivers and leases — use retail/trade-in sources
+    return [
+      `${exact} market value ${range}`,
+      `${exact} for sale price ${now}`,
+      `site:kbb.com ${car} value`,
+      `site:edmunds.com ${car} price`,
+      `site:autotrader.com ${car} for sale`,
+      `site:cargurus.com ${car} market value`,
+      `${exact} depreciation resale value`,
+      `${exact} trade-in value ${range}`,
+      `${car} used car price ${range}`,
+      `${exact} dealer price listing ${now}`,
+    ];
+  }
 }
 
 function isRelevantResult(r, make, model) {
@@ -54,18 +72,66 @@ function extractPrices(text) {
   const matches = (text || '').match(/\$[\d,]+(?:\.\d+)?/g) || [];
   return [...new Set(matches)]
     .map(p => parseInt(p.replace(/[$,]/g, '')))
-    .filter(p => p >= 10000)
+    .filter(p => p >= 5000)
+    .sort((a, b) => b - a)
     .map(p => '$' + p.toLocaleString());
 }
 
 function formatResults(results) {
-  const lines = results.map((r, i) => {
+  return results.map((r, i) => {
     const combined = `${r.title || ''} ${r.content || ''}`;
     const prices = extractPrices(combined);
-    const priceStr = prices.length ? `  💰 Prices found: ${prices.slice(0, 5).join(', ')}` : '';
+    const priceStr = prices.length ? `  Prices found: ${prices.slice(0, 6).join(', ')}` : '';
     return `[${i + 1}] ${r.title}\n${r.url}${priceStr}\n${r.content?.slice(0, 500) || ''}`;
-  });
-  return lines.join('\n\n');
+  }).join('\n\n');
+}
+
+function buildPrompt(specs, category, searchContext) {
+  const today = new Date().toDateString();
+  const isCollectable = category === 'Collectable';
+
+  const methodology = isCollectable ? `
+VALUATION METHODOLOGY — COLLECTIBLE / LIMITED PRODUCTION:
+- These cars do NOT follow standard depreciation curves
+- "avg" = where this car trades at auction or private sale TODAY, anchored to the MOST RECENT comps
+- If prices are rising year-over-year, avg must reflect the current trajectory — not an average of old and new
+- Do NOT round down to be conservative — use recent hammer prices as your floor, not your ceiling
+- "low" = realistic no-reserve floor from the lowest recent comp; "high" = top recent result for best spec
+- Mileage adjustment: ultra-low miles (<500) command large premiums; higher miles (>10k) modest discount
+- Color adjustment: rare/PTS colors command premiums; common colors are neutral` : `
+VALUATION METHODOLOGY — DAILY DRIVER / MODERN VEHICLE:
+- Apply standard market depreciation based on age, mileage, and condition
+- "avg" = current private-party market value based on comparable listings and recent sales
+- Use KBB, Edmunds, CarGurus, and AutoTrader data as primary references
+- Mileage adjustment: compare to average annual mileage (~12-15k/year); adjust accordingly
+- Condition and spec (trim level, options) affect value — use notes/VIN if available
+- "low" = trade-in / wholesale value; "high" = retail asking price for clean examples`;
+
+  return `You are an expert automotive appraiser conducting an in-depth market analysis. Today's date is ${today}.
+
+VEHICLE SPECS:
+${specs}
+
+LIVE MARKET SEARCH RESULTS:
+${searchContext}
+${methodology}
+
+ANALYSIS STEPS — work through each before outputting JSON:
+1. Extract every price ≥ $5,000 from the search results with its source and approximate date
+2. Discard any comp older than 3 years or about a different make/model/year
+3. Sort remaining comps newest first — the most recent 3-5 sales are your primary anchors
+4. Identify the closest comps to THIS car's mileage, color, and spec
+5. Apply appropriate adjustments for mileage delta, color, and condition
+6. Set avg = where this specific car sells TODAY; set low and high accordingly
+
+Respond with ONLY a valid JSON object — no preamble, no explanation outside the JSON:
+{
+  "low": number (USD, no commas or symbols),
+  "avg": number (USD, current market value for this specific car),
+  "high": number (USD, top of market for best spec/condition),
+  "trend": "Appreciating" | "Stable" | "Depreciating",
+  "market_note": string (2-3 sentences: cite the 3 most relevant recent comps with exact price, date, mileage, and source; then explain how this car's specific color, mileage, and spec adjust the value up or down from those comps)
+}`;
 }
 
 // GET all latest valuations (one per car)
@@ -94,22 +160,20 @@ router.post('/:carId', async (req, res) => {
     `Year: ${car.year}`,
     `Make: ${car.make}`,
     `Model: ${car.model}`,
-    car.color    ? `Color: ${car.color}`        : null,
-    car.mileage  ? `Mileage: ${car.mileage}`    : null,
-    car.vin      ? `VIN: ${car.vin}`            : null,
-    car.status   ? `Status: ${car.status}`      : null,
-    car.ownership? `Ownership: ${car.ownership}`: null,
-    car.notes    ? `Notes: ${car.notes}`        : null,
+    `Category: ${car.category || 'Daily'}`,
+    car.color     ? `Color: ${car.color}`         : null,
+    car.mileage   ? `Mileage: ${car.mileage}`     : null,
+    car.vin       ? `VIN: ${car.vin}`             : null,
+    car.status    ? `Status: ${car.status}`        : null,
+    car.ownership ? `Ownership: ${car.ownership}`  : null,
+    car.notes     ? `Notes: ${car.notes}`          : null,
   ].filter(Boolean).join('\n');
 
-  const carDesc = `${car.year} ${car.make} ${car.model}${car.color ? ` (${car.color})` : ''}${car.mileage ? `, ${car.mileage} miles` : ''}`;
-
   try {
-    // Run all searches in parallel — BaT and RM get advanced depth for richer price data
-    const queries = buildQueries(car.year, car.make, car.model);
+    const queries = buildQueries(car.year, car.make, car.model, car.category);
+    // First 4 queries get advanced depth for richer content
     const resultSets = await Promise.all(queries.map((q, i) => tavilySearch(q, i < 4)));
 
-    // Deduplicate by URL and filter to only results about this exact vehicle
     const seen = new Set();
     const allResults = resultSets.flat().filter(r => {
       if (!r.url || seen.has(r.url)) return false;
@@ -120,51 +184,12 @@ router.post('/:carId', async (req, res) => {
 
     const searchContext = formatResults(allResults);
     const sources = allResults.map(r => ({ title: r.title, url: r.url })).slice(0, 12);
+    const prompt = buildPrompt(specs, car.category, searchContext);
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages: [{
-        role: 'user',
-        content: `You are an expert collector car appraiser. Today's date is ${new Date().toDateString()}. Using the vehicle specs and live search results below, determine the precise current US market value for this specific car.
-
-VEHICLE SPECS:
-${specs}
-
-LIVE SEARCH RESULTS:
-${searchContext}
-
-Step 1 — Extract every sale price ≥ $10,000 from the results above. List each one with its date and source.
-Step 2 — Discard any comp older than 3 years or about a different make/model/year.
-Step 3 — Sort remaining comps by date, newest first. The most recent 3-4 sales are your primary anchors.
-Step 4 — Adjust for this car's specific mileage vs the comps (pro-rate a premium or discount).
-Step 5 — Output the JSON below.
-
-Valuation rules:
-- "avg" = where this exact car trades TODAY based on the most recent comps — NOT a midpoint of all-time data
-- If the most recent comps are above $500K, avg must be above $500K — do not round down
-- Limited-production collectibles do NOT depreciate — if prices are rising, avg must reflect the current ceiling
-- "low" = realistic no-reserve floor based on the lowest recent comp; "high" = best recent result for top spec
-- Adjust for color premium/discount and mileage relative to comps
-
-Respond with ONLY a JSON object, no other text:
-{
-  "low": number,
-  "avg": number,
-  "high": number,
-  "trend": "Appreciating" | "Stable" | "Depreciating",
-  "market_note": string (cite the 2-3 most relevant recent sales with exact prices, dates, mileage, and source — then explain how this car's specs adjust from those comps)
-}
-
-Respond with ONLY a JSON object, no other text:
-{
-  "low": number (realistic minimum — motivated seller, no reserve),
-  "avg": number (what this exact car sells for today based on recent 2025-2026 comps),
-  "high": number (top of market — exceptional spec, ultra-low miles, or strong provenance),
-  "trend": one of "Appreciating" | "Stable" | "Depreciating",
-  "market_note": string (one sentence citing the most relevant recent sales with prices and dates, and noting how this car's specific specs affect value)
-}`,
-      }],
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }],
     });
 
     const text = message.content.find(b => b.type === 'text')?.text || '';
@@ -177,7 +202,6 @@ Respond with ONLY a JSON object, no other text:
       'INSERT INTO car_valuations (car_id, low, avg, high, trend, market_note, sources, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(car.id, v.low, v.avg, v.high, v.trend || '', v.market_note || '', JSON.stringify(sources), now);
 
-    // Keep stored value in sync with market avg
     db.prepare('UPDATE cars SET value = ? WHERE id = ?').run(v.avg, car.id);
 
     res.json(db.prepare('SELECT * FROM car_valuations WHERE id = ?').get(result.lastInsertRowid));
