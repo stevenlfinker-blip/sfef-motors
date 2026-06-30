@@ -28,6 +28,8 @@ async function tavilySearch(query) {
 function buildQueries(year, make, model) {
   const exact = `"${year} ${make} ${model}"`;
   const car   = `${year} ${make} ${model}`;
+  const now   = new Date().getFullYear();
+  const range = `${now - 2} ${now - 1} ${now}`;
   return [
     `site:bringatrailer.com ${exact}`,
     `site:bringatrailer.com ${car} sold`,
@@ -37,8 +39,8 @@ function buildQueries(year, make, model) {
     `site:hagerty.com ${exact} value`,
     `site:classic.com ${exact}`,
     `site:dupont-registry.com ${exact}`,
-    `${exact} sold price auction result 2025 2026`,
-    `${exact} market value sale 2025 2026`,
+    `${exact} sold price auction result ${range}`,
+    `${exact} market value sale ${range}`,
   ];
 }
 
@@ -120,15 +122,15 @@ LIVE SEARCH RESULTS:
 ${searchContext}
 
 Instructions:
-- ONLY use search results that are specifically about the exact vehicle listed above — ignore any result about a different make, model, or year
-- Only use comps with similar mileage, color, and spec where possible — a 500-mile example is not a valid comp for a 15,000-mile car
-- Use ALL specs above to refine the valuation — color, mileage, VIN, condition, and notes all affect value significantly
-- Prioritize 2025 and 2026 sales above all others — recent comps are far more relevant than older ones
-- "avg" should reflect what this exact car would realistically sell for TODAY, not a conservative floor
-- Do not anchor to MSRP or older sales — use the most recent hammer prices and asking prices as your primary reference
-- For collectibles and appreciating cars, lean toward the upper end of recent comps
-- Adjust for the specific color (some colors command premiums), mileage relative to comps, and any special notes
-- "low" = realistic minimum for a motivated seller; "high" = top of market for exceptional spec or provenance
+- ONLY use search results specifically about this exact vehicle — discard any result about a different make, model, or year
+- Use comps with similar mileage and spec — a 200-mile example is not a valid comp for a 10,000-mile car and vice versa
+- Use ALL specs to refine the valuation — color, mileage, VIN, condition, and notes all affect value
+- Search results cover the last 3 years (${new Date().getFullYear() - 2}–${new Date().getFullYear()}) — weight the most recent sales most heavily
+- "avg" must reflect what this car sells for RIGHT NOW based on the most recent hammer prices, not a midpoint of all-time data
+- Do NOT anchor to MSRP or depreciation curves — limited-production collectibles do not follow normal depreciation
+- If the car is clearly appreciating (rising auction results over time), the avg should reflect the current upward trajectory, not an average of old and new prices
+- Never undervalue a known appreciating collectible — use the current market ceiling as your reference, not the floor
+- "low" = what a motivated seller gets with no reserve; "high" = top of market for best spec or provenance
 
 Respond with ONLY a JSON object, no other text:
 {
