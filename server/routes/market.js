@@ -15,7 +15,7 @@ async function tavilySearch(query, advanced = false) {
         api_key: TAVILY_KEY,
         query,
         search_depth: advanced ? 'advanced' : 'basic',
-        max_results: advanced ? 7 : 5,
+        max_results: advanced ? 10 : 5,
         include_raw_content: false,
         include_answer: false,
       }),
@@ -50,10 +50,22 @@ function isRelevantResult(r, make, model) {
   return text.includes(make.toLowerCase()) && text.includes(model.toLowerCase().split(' ')[0]);
 }
 
+function extractPrices(text) {
+  const matches = (text || '').match(/\$[\d,]+(?:\.\d+)?/g) || [];
+  return [...new Set(matches)]
+    .map(p => parseInt(p.replace(/[$,]/g, '')))
+    .filter(p => p >= 10000)
+    .map(p => '$' + p.toLocaleString());
+}
+
 function formatResults(results) {
-  return results.map((r, i) =>
-    `[${i + 1}] ${r.title}\n${r.url}\n${r.content?.slice(0, 300) || ''}`
-  ).join('\n\n');
+  const lines = results.map((r, i) => {
+    const combined = `${r.title || ''} ${r.content || ''}`;
+    const prices = extractPrices(combined);
+    const priceStr = prices.length ? `  💰 Prices found: ${prices.slice(0, 5).join(', ')}` : '';
+    return `[${i + 1}] ${r.title}\n${r.url}${priceStr}\n${r.content?.slice(0, 500) || ''}`;
+  });
+  return lines.join('\n\n');
 }
 
 // GET all latest valuations (one per car)
@@ -114,7 +126,7 @@ router.post('/:carId', async (req, res) => {
       max_tokens: 1024,
       messages: [{
         role: 'user',
-        content: `You are an expert collector car appraiser. Using the vehicle specs and live search results below, determine the precise current US market value for this specific car.
+        content: `You are an expert collector car appraiser. Today's date is ${new Date().toDateString()}. Using the vehicle specs and live search results below, determine the precise current US market value for this specific car.
 
 VEHICLE SPECS:
 ${specs}
@@ -122,16 +134,27 @@ ${specs}
 LIVE SEARCH RESULTS:
 ${searchContext}
 
-Instructions:
-1. ONLY use results about this exact make, model and year — ignore anything else
-2. Extract every specific sale price and date you can find in the results
-3. Sort those sales by date — the MOST RECENT sale is your anchor for "avg", not a midpoint
-4. If prices are rising over the 3-year window, "avg" must reflect WHERE PRICES ARE NOW, not where they were 2 years ago
-5. Older sales only show the trend direction — they must not pull "avg" downward
-6. Adjust for mileage vs comps: higher miles = modest discount, lower miles = premium
-7. Do NOT apply standard depreciation — limited-production collectibles appreciate, not depreciate
-8. "low" = most recent realistic no-reserve floor; "avg" = where this car trades TODAY; "high" = best spec, lowest miles, strongest provenance
-9. If you see recent sales above $500K, avg must be in that range — do not round down to be conservative
+Step 1 — Extract every sale price ≥ $10,000 from the results above. List each one with its date and source.
+Step 2 — Discard any comp older than 3 years or about a different make/model/year.
+Step 3 — Sort remaining comps by date, newest first. The most recent 3-4 sales are your primary anchors.
+Step 4 — Adjust for this car's specific mileage vs the comps (pro-rate a premium or discount).
+Step 5 — Output the JSON below.
+
+Valuation rules:
+- "avg" = where this exact car trades TODAY based on the most recent comps — NOT a midpoint of all-time data
+- If the most recent comps are above $500K, avg must be above $500K — do not round down
+- Limited-production collectibles do NOT depreciate — if prices are rising, avg must reflect the current ceiling
+- "low" = realistic no-reserve floor based on the lowest recent comp; "high" = best recent result for top spec
+- Adjust for color premium/discount and mileage relative to comps
+
+Respond with ONLY a JSON object, no other text:
+{
+  "low": number,
+  "avg": number,
+  "high": number,
+  "trend": "Appreciating" | "Stable" | "Depreciating",
+  "market_note": string (cite the 2-3 most relevant recent sales with exact prices, dates, mileage, and source — then explain how this car's specs adjust from those comps)
+}
 
 Respond with ONLY a JSON object, no other text:
 {
