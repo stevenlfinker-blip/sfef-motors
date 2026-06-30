@@ -93,9 +93,13 @@ const App = {
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
     document.getElementById(`section-${section}`).classList.add('active');
 
-    // Update nav
+    // Update sidebar nav
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     document.querySelector(`.nav-item[data-section="${section}"]`)?.classList.add('active');
+
+    // Update bottom nav — only the 4 primary tabs; More stays neutral
+    document.querySelectorAll('.bnav-item[data-section]').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.bnav-item[data-section="${section}"]`)?.classList.add('active');
 
     // Update title
     document.getElementById('page-title').textContent = SECTION_TITLES[section] || section;

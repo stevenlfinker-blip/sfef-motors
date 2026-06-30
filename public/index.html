@@ -421,6 +421,47 @@
   </div>
 </div>
 
+<!-- ── Bottom navigation (mobile only) ── -->
+<nav id="bottom-nav">
+  <button class="bnav-item active" data-section="dashboard" onclick="App.navigate('dashboard')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+    </svg>
+    <span>Home</span>
+  </button>
+  <button class="bnav-item" data-section="cars" onclick="App.navigate('cars')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 11l1.5-4.5A1 1 0 017.4 6h9.2a1 1 0 01.9.5L19 11H5z"/>
+      <rect x="2" y="11" width="20" height="6" rx="1"/>
+      <circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>
+    </svg>
+    <span>Cars</span>
+  </button>
+  <button class="bnav-item" data-section="market" onclick="App.navigate('market')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3,17 9,11 13,15 21,7"/>
+      <polyline points="17,7 21,7 21,11"/>
+    </svg>
+    <span>Market</span>
+  </button>
+  <button class="bnav-item" data-section="expenses" onclick="App.navigate('expenses')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="2" x2="12" y2="22"/>
+      <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>
+    </svg>
+    <span>Expenses</span>
+  </button>
+  <button class="bnav-item" id="bnav-more" onclick="App.toggleSidebar()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+    <span>More</span>
+  </button>
+</nav>
+
 <!-- ── Toast container ── -->
 <div id="toast-container"></div>
 
