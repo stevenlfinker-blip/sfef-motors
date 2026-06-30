@@ -28,26 +28,16 @@ async function tavilySearch(query) {
 function buildQueries(year, make, model) {
   const car = `${year} ${make} ${model}`;
   return [
-    `${car} sold price 2025 2026`,
-    `${car} auction result hammer price 2025 2026`,
     `site:bringatrailer.com ${car}`,
     `site:carsandbids.com ${car}`,
     `site:rmsothebys.com ${car}`,
-    `site:goodingco.com ${car}`,
     `site:barrett-jackson.com ${car} sold`,
-    `site:bonhams.com ${car}`,
     `site:mecum.com ${car} sold`,
     `site:hagerty.com ${car} value`,
     `site:classic.com ${car}`,
     `site:dupont-registry.com ${car}`,
-    `${car} ebay sold listing price`,
-    `${car} autotrader listing price`,
-    `${car} cargurus market value`,
-    `${car} for sale asking price 2025`,
-    `${car} collector car market value appreciation`,
-    `${car} insurance appraisal value`,
-    `${car} price history trend 2024 2025 2026`,
-    `${car} private sale transaction price`,
+    `${car} sold price auction result 2025 2026`,
+    `${car} market value private sale 2025 2026`,
   ];
 }
 
