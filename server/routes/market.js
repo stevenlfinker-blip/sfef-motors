@@ -26,24 +26,30 @@ async function tavilySearch(query) {
 }
 
 function buildQueries(year, make, model) {
-  const car = `${year} ${make} ${model}`;
+  const exact = `"${year} ${make} ${model}"`;
+  const car   = `${year} ${make} ${model}`;
   return [
-    `site:bringatrailer.com ${car}`,
-    `site:carsandbids.com ${car}`,
-    `site:rmsothebys.com ${car}`,
-    `site:barrett-jackson.com ${car} sold`,
-    `site:mecum.com ${car} sold`,
-    `site:hagerty.com ${car} value`,
-    `site:classic.com ${car}`,
-    `site:dupont-registry.com ${car}`,
-    `${car} sold price auction result 2025 2026`,
-    `${car} market value private sale 2025 2026`,
+    `site:bringatrailer.com ${exact}`,
+    `site:bringatrailer.com ${car} sold`,
+    `site:rmsothebys.com ${exact}`,
+    `site:barrett-jackson.com ${exact} sold`,
+    `site:mecum.com ${exact} sold`,
+    `site:hagerty.com ${exact} value`,
+    `site:classic.com ${exact}`,
+    `site:dupont-registry.com ${exact}`,
+    `${exact} sold price auction result 2025 2026`,
+    `${exact} market value sale 2025 2026`,
   ];
+}
+
+function isRelevantResult(r, make, model) {
+  const text = `${r.title || ''} ${r.url || ''} ${r.content || ''}`.toLowerCase();
+  return text.includes(make.toLowerCase()) && text.includes(model.toLowerCase().split(' ')[0]);
 }
 
 function formatResults(results) {
   return results.map((r, i) =>
-    `[${i + 1}] ${r.title}\n${r.url}\n${r.content?.slice(0, 250) || ''}`
+    `[${i + 1}] ${r.title}\n${r.url}\n${r.content?.slice(0, 300) || ''}`
   ).join('\n\n');
 }
 
@@ -88,10 +94,11 @@ router.post('/:carId', async (req, res) => {
     const queries = buildQueries(car.year, car.make, car.model);
     const resultSets = await Promise.all(queries.map(q => tavilySearch(q)));
 
-    // Deduplicate by URL, keep order
+    // Deduplicate by URL and filter to only results about this exact vehicle
     const seen = new Set();
     const allResults = resultSets.flat().filter(r => {
       if (!r.url || seen.has(r.url)) return false;
+      if (!isRelevantResult(r, car.make, car.model)) return false;
       seen.add(r.url);
       return true;
     });
@@ -113,6 +120,8 @@ LIVE SEARCH RESULTS:
 ${searchContext}
 
 Instructions:
+- ONLY use search results that are specifically about the exact vehicle listed above — ignore any result about a different make, model, or year
+- Only use comps with similar mileage, color, and spec where possible — a 500-mile example is not a valid comp for a 15,000-mile car
 - Use ALL specs above to refine the valuation — color, mileage, VIN, condition, and notes all affect value significantly
 - Prioritize 2025 and 2026 sales above all others — recent comps are far more relevant than older ones
 - "avg" should reflect what this exact car would realistically sell for TODAY, not a conservative floor
