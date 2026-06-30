@@ -286,8 +286,9 @@ const Dashboard = (() => {
     const allAvgs = rawByCarId.flat().map(p => p.avg).filter(Boolean);
 
     // Dynamic range: earliest point (with small left pad) → latest point + ~5 weeks right pad
-    const xMin = allTs.length ? Math.min(...allTs) - 15 * 24 * 3600 * 1000 : Date.now() - 365 * 24 * 3600 * 1000;
-    const xMax = allTs.length ? Math.max(...allTs) + 35 * 24 * 3600 * 1000 : Date.now();
+    const DAY = 24 * 3600 * 1000;
+    const xMin = allTs.length ? Math.min(...allTs) - 8 * DAY : Date.now() - 365 * DAY;
+    const xMax = allTs.length ? Math.max(...allTs) + 8 * DAY : Date.now();
 
     const yMin = allAvgs.length ? Math.floor(Math.min(...allAvgs) * 0.85 / 50000) * 50000 : 0;
     const yMax = collectibles.reduce((m, c) => Math.max(m, c.val.high || c.val.avg || 0), 0) * 1.05;
