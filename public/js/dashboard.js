@@ -377,6 +377,15 @@ const Dashboard = (() => {
       `<circle id="mkt-dot-${c.id}" r="4" fill="${c.color}" stroke="#0d1421" stroke-width="1.5" style="display:none"/>`
     ).join('');
 
+    // Last updated = most recent real (non-estimated) valuation across all collectibles
+    const lastRealTs = collectibles.reduce((max, c) => {
+      const t = new Date(c.val.fetched_at).getTime();
+      return t > max ? t : max;
+    }, 0);
+    const lastUpdatedStr = lastRealTs
+      ? new Date(lastRealTs).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+      : '—';
+
     const svgChart = `<svg id="mkt-svg" viewBox="0 0 ${W} ${H}" style="width:100%;display:block;cursor:crosshair">
       <line x1="${PAD.left}" y1="${baseY}" x2="${W-PAD.right}" y2="${baseY}" stroke="#2a3347" stroke-width="1"/>
       ${gridLines}
@@ -386,6 +395,11 @@ const Dashboard = (() => {
       <line id="mkt-xhair" x1="0" y1="${PAD.top}" x2="0" y2="${baseY}" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="3,3" style="display:none"/>
       <rect id="mkt-overlay" x="${PAD.left}" y="${PAD.top}" width="${chartW}" height="${chartH}" fill="transparent"/>
     </svg>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:4px;padding-right:2px">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0"></span>
+      <span style="font-size:9px;color:var(--text-muted);letter-spacing:.04em">LAST UPDATED</span>
+      <span style="font-size:9px;color:var(--accent);font-weight:600">${escHtml(lastUpdatedStr)}</span>
+    </div>
     <div id="mkt-tooltip" style="display:none;position:fixed;background:#111827;border:1px solid #1e2d45;border-radius:5px;padding:8px 12px;pointer-events:none;z-index:9999;min-width:170px;box-shadow:0 6px 24px rgba(0,0,0,.6)"></div>`;
 
     // Clickable legend
