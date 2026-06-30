@@ -156,6 +156,102 @@ const Dashboard = (() => {
       </div>`;
   }
 
+  // ── Widget: Collectibles Market Intelligence ──────
+  function collectiblesMarketWidget(cars, valuationMap) {
+    const TREND_COLOR = {
+      Appreciating: '#00e5a0',
+      Stable:       '#00d4ff',
+      Depreciating: '#ff3a5c',
+    };
+
+    const collectibles = cars
+      .filter(c => c.category === 'Collectable')
+      .map(c => ({ ...c, val: valuationMap[c.id] }))
+      .filter(c => c.val && c.val.avg > 0);
+
+    if (collectibles.length === 0) {
+      return `<div class="dash-full"><div class="dash-panel">
+        <div class="dash-panel-header"><span class="dash-panel-title">Collectibles Market Intelligence</span></div>
+        <div class="dash-panel-body"><div style="color:var(--text-muted);font-size:12px;padding:8px 0">No valuations yet — go to Market Analytics and run a valuation.</div></div>
+      </div></div>`;
+    }
+
+    function fmtK(n) {
+      if (!n) return '—';
+      if (n >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
+      return '$' + Math.round(n / 1000) + 'K';
+    }
+
+    // Range bar chart: low────[avg]────high per car
+    const maxVal = Math.max(...collectibles.map(c => c.val.high || 0), 1);
+    const W = 700, PAD_L = 155, PAD_R = 65, PAD_T = 12, PAD_B = 12;
+    const ROW_H = 36, BAR_H = 8;
+    const H = PAD_T + collectibles.length * ROW_H + PAD_B;
+    const chartW = W - PAD_L - PAD_R;
+
+    const svgRows = collectibles.map((c, i) => {
+      const midY  = PAD_T + i * ROW_H + ROW_H / 2;
+      const color = TREND_COLOR[c.val.trend] || '#00d4ff';
+      const xLow  = PAD_L + ((c.val.low  || 0) / maxVal) * chartW;
+      const xAvg  = PAD_L + ((c.val.avg  || 0) / maxVal) * chartW;
+      const xHigh = PAD_L + ((c.val.high || 0) / maxVal) * chartW;
+      const name  = `${c.year} ${c.make} ${c.model}`;
+      const label = name.length > 24 ? name.slice(0, 22) + '…' : name;
+
+      return `
+        <text x="${PAD_L - 8}" y="${midY + 4}" text-anchor="end" fill="#c0c8d8" font-size="10">${label}</text>
+        <rect x="${xLow.toFixed(1)}" y="${(midY - BAR_H/2).toFixed(1)}" width="${Math.max(0, xHigh - xLow).toFixed(1)}" height="${BAR_H}" fill="${color}" opacity="0.2" rx="2"/>
+        <line x1="${xLow.toFixed(1)}" y1="${(midY - BAR_H/2 - 2).toFixed(1)}" x2="${xLow.toFixed(1)}" y2="${(midY + BAR_H/2 + 2).toFixed(1)}" stroke="${color}" stroke-width="1.5" opacity="0.5"/>
+        <line x1="${xHigh.toFixed(1)}" y1="${(midY - BAR_H/2 - 2).toFixed(1)}" x2="${xHigh.toFixed(1)}" y2="${(midY + BAR_H/2 + 2).toFixed(1)}" stroke="${color}" stroke-width="1.5" opacity="0.5"/>
+        <rect x="${(xAvg - 2).toFixed(1)}" y="${(midY - BAR_H/2 - 2).toFixed(1)}" width="4" height="${BAR_H + 4}" fill="${color}" rx="1"/>
+        <text x="${(xHigh + 5).toFixed(1)}" y="${(midY + 4).toFixed(1)}" fill="${color}" font-size="9" font-weight="bold">${fmtK(c.val.avg)}</text>
+        <text x="${xLow.toFixed(1)}" y="${(midY - BAR_H/2 - 4).toFixed(1)}" fill="#6b7a99" font-size="8">${fmtK(c.val.low)}</text>`;
+    }).join('');
+
+    const svgChart = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">
+      <line x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${H - PAD_B}" stroke="#2a3347" stroke-width="1"/>
+      ${svgRows}
+    </svg>`;
+
+    // Legend
+    const legend = Object.entries(TREND_COLOR).map(([label, color]) =>
+      `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:14px;font-size:9px;color:${color}">
+        <span style="width:10px;height:3px;background:${color};display:inline-block;border-radius:1px"></span>${label}
+      </span>`
+    ).join('');
+
+    // Research notes per car
+    const notes = collectibles.map(c => {
+      const color     = TREND_COLOR[c.val.trend] || '#00d4ff';
+      const trendIcon = { Appreciating: '▲', Stable: '●', Depreciating: '▼' }[c.val.trend] || '●';
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
+          <span style="font-size:11px;font-weight:600;color:var(--text)">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</span>
+          <span style="font-size:9px;padding:1px 7px;border-radius:2px;background:rgba(0,0,0,.35);border:1px solid ${color};color:${color}">${trendIcon} ${escHtml(c.val.trend || '')}</span>
+          <span style="font-size:11px;font-weight:700;color:${color};margin-left:auto">${fmt$(c.val.avg)}</span>
+          <span style="font-size:10px;color:var(--text-muted)">${fmt$(c.val.low)} – ${fmt$(c.val.high)}</span>
+        </div>
+        <div style="font-size:10px;color:var(--text-muted);line-height:1.6">${escHtml(c.val.market_note || 'No research note available.')}</div>
+        <div style="font-size:9px;color:var(--text-muted);margin-top:5px">Updated ${_fmtValDate(c.val.fetched_at)}</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="dash-full"><div class="dash-panel">
+      <div class="dash-panel-header">
+        <span class="dash-panel-title">Collectibles Market Intelligence</span>
+        <span style="font-size:10px;color:var(--text-muted)">Live auction comps · AI valuation research · ${collectibles.length} vehicles</span>
+      </div>
+      <div class="dash-panel-body" style="padding:8px 0 0">
+        <div style="margin-bottom:4px">${legend}</div>
+        <div style="margin-bottom:12px">${svgChart}</div>
+        <div style="padding-top:8px;border-top:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text-muted);font-weight:600;letter-spacing:.08em;margin-bottom:2px">RESEARCH NOTES</div>
+          ${notes}
+        </div>
+      </div>
+    </div></div>`;
+  }
+
   // ── Widget: Monthly Spending Chart ────────────────
   function monthlySpendWidget(costs) {
     const now = new Date();
@@ -657,6 +753,7 @@ const Dashboard = (() => {
 
       el.innerHTML =
         hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist, valuationMap) +
+        collectiblesMarketWidget(cars, valuationMap) +
         '<div class="dash-grid-2-wide" style="margin-top:12px">' +
           monthlySpendWidget(costs) +
           spendByCatWidget(costs) +
