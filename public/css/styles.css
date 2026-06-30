@@ -758,6 +758,25 @@ th.sortable:hover { color: var(--accent); }
   border-radius: 4px;
 }
 
+/* ── Collapsible market research notes ── */
+.note-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.note-toggle-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0 0;
+  font-family: inherit;
+}
+.note-toggle-btn:hover { text-decoration: underline; }
+
 /* ── Watchlist priority badges ── */
 .badge-priority-high   { background: rgba(255,58,92,.15);  color: var(--red); }
 .badge-priority-medium { background: rgba(255,106,0,.15);  color: var(--orange); }

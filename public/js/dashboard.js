@@ -252,6 +252,14 @@ const Dashboard = (() => {
     if (btn) btn.style.opacity = hidden ? '1' : '0.3';
   }
 
+  function _noteToggle(carId) {
+    const note = document.getElementById(`mkt-note-${carId}`);
+    const btn  = document.getElementById(`mkt-note-btn-${carId}`);
+    if (!note || !btn) return;
+    const collapsed = note.classList.toggle('note-clamp');
+    btn.textContent = collapsed ? 'Show more' : 'Show less';
+  }
+
   // ── Widget: Collectibles Market Intelligence ──────
   function collectiblesMarketWidget(cars, valuationMap, history) {
     const CAR_COLORS = ['#00e5a0','#00d4ff','#facc15','#ff6a00','#7c4dff','#ff3a5c','#f472b6','#a3e635'];
@@ -438,7 +446,8 @@ const Dashboard = (() => {
           <span style="font-size:11px;font-weight:700;color:${c.color};margin-left:auto">${fmt$(c.val.avg)}</span>
           <span style="font-size:10px;color:var(--text-muted)">${fmt$(c.val.low)} – ${fmt$(c.val.high)}</span>
         </div>
-        <div style="font-size:10px;color:var(--text-muted);line-height:1.6">${escHtml(c.val.market_note||'No research note available.')}</div>
+        <div id="mkt-note-${c.id}" class="note-clamp" style="font-size:10px;color:var(--text-muted);line-height:1.6">${escHtml(c.val.market_note||'No research note available.')}</div>
+        <button class="note-toggle-btn" id="mkt-note-btn-${c.id}" onclick="Dashboard._noteToggle(${c.id})">Show more</button>
         <div style="font-size:9px;color:var(--text-muted);margin-top:5px">Updated ${_fmtValDate(c.val.fetched_at)}</div>
       </div>`;
     }).join('');
@@ -1025,5 +1034,5 @@ const Dashboard = (() => {
     } catch (e) { Toast.show('Failed to delete', 'error'); }
   }
 
-  return { load, watchlistAdd, watchlistEdit, watchlistDel, _mktToggle };
+  return { load, watchlistAdd, watchlistEdit, watchlistDel, _mktToggle, _noteToggle };
 })();

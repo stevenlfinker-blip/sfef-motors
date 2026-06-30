@@ -86,7 +86,10 @@ const Market = (() => {
         ${_trendBadge(v.trend)}
         ${delta !== null ? `<span style="font-size:12px;font-weight:600;color:${deltaColor}">${deltaSign}${fmt$(delta)} vs stored</span>` : ''}
       </div>
-      ${v.market_note ? `<div style="margin-top:8px;font-size:11px;color:var(--text-muted);font-style:italic">${escHtml(v.market_note)}</div>` : ''}
+      ${v.market_note ? `<div style="margin-top:8px">
+        <div id="market-note-${car.id}" class="note-clamp" style="font-size:11px;color:var(--text-muted);font-style:italic">${escHtml(v.market_note)}</div>
+        <button class="note-toggle-btn" id="market-note-btn-${car.id}" onclick="Market._noteToggle(${car.id})">Show more</button>
+      </div>` : ''}
       ${_sourcesHtml(v.sources)}
       <div style="margin-top:6px;font-size:10px;color:var(--text-muted)">Updated ${_relTime(v.fetched_at)}</div>` :
       `<div style="padding:16px 0;text-align:center;color:var(--text-muted);font-size:12px">No valuation yet</div>`;
@@ -169,6 +172,14 @@ const Market = (() => {
     </div>`;
   }
 
+  function _noteToggle(carId) {
+    const note = document.getElementById(`market-note-${carId}`);
+    const btn  = document.getElementById(`market-note-btn-${carId}`);
+    if (!note || !btn) return;
+    const collapsed = note.classList.toggle('note-clamp');
+    btn.textContent = collapsed ? 'Show more' : 'Show less';
+  }
+
   function _relTime(iso) {
     if (!iso) return 'never';
     const diff = Date.now() - new Date(iso).getTime();
@@ -180,5 +191,5 @@ const Market = (() => {
     return `${Math.floor(hrs / 24)}d ago`;
   }
 
-  return { load, render, refresh, refreshAll };
+  return { load, render, refresh, refreshAll, _noteToggle };
 })();
