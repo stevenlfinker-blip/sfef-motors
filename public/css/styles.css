@@ -648,6 +648,25 @@ th.sortable:hover { color: var(--accent); }
   /* Filter selects also need it */
   .filter-select  { font-size: 16px; }
   .search-input   { font-size: 16px; }
+
+  /* Filters bar scrolls horizontally instead of stacking */
+  .filters-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    gap: 6px;
+  }
+  .filters-bar::-webkit-scrollbar { display: none; }
+  .filter-select, .search-input { flex-shrink: 0; min-width: 130px; }
+
+  /* Section actions wrap so buttons don't get clipped */
+  .section-actions { flex-wrap: wrap; gap: 6px; }
+  .section-actions .btn { min-width: 0; }
+
+  /* Toast slides in from bottom on mobile */
+  #toast-container { top: auto; bottom: calc(16px + env(safe-area-inset-bottom)); right: 12px; left: 12px; }
+  .toast { min-width: 0; }
 }
 
 /* ── Dashboard widget grids ── */

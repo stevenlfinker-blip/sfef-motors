@@ -173,9 +173,9 @@ const Dashboard = (() => {
     const tooltip  = document.getElementById('mkt-tooltip');
     const { carData, W, PAD, chartW, chartH, xMin, xMax, baseY } = _mktChart;
 
-    overlay.addEventListener('mousemove', e => {
+    function handlePointer(clientX, clientY) {
       const rect  = svg.getBoundingClientRect();
-      const svgX  = (e.clientX - rect.left) * (W / rect.width);
+      const svgX  = (clientX - rect.left) * (W / rect.width);
       const t     = xMin + ((svgX - PAD.left) / chartW) * (xMax - xMin);
 
       // Find the month all cars share closest to cursor
@@ -213,20 +213,32 @@ const Dashboard = (() => {
 
       tooltip.innerHTML = `<div style="color:#4a5a7a;font-size:9px;font-weight:600;letter-spacing:.05em;margin-bottom:5px">${new Date(snapT).toLocaleDateString('en-US',{month:'short',year:'numeric'})}</div>${rows.join('')}`;
       tooltip.style.display = 'block';
-      const tx = Math.min(e.clientX + 16, window.innerWidth - 190);
-      const ty = Math.max(e.clientY - 30, 8);
+      const tx = Math.min(clientX + 16, window.innerWidth - 190);
+      const ty = Math.max(clientY - 30, 8);
       tooltip.style.left = tx + 'px';
       tooltip.style.top  = ty + 'px';
-    });
+    }
 
-    overlay.addEventListener('mouseleave', () => {
+    overlay.addEventListener('mousemove', e => handlePointer(e.clientX, e.clientY));
+
+    overlay.addEventListener('touchstart', e => { e.preventDefault(); }, { passive: false });
+    overlay.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      handlePointer(t.clientX, t.clientY);
+    }, { passive: false });
+
+    function handlePointerEnd() {
       xhair.style.display = 'none';
       tooltip.style.display = 'none';
       carData.forEach(c => {
         const dot = document.getElementById(`mkt-dot-${c.id}`);
         if (dot) dot.style.display = 'none';
       });
-    });
+    }
+
+    overlay.addEventListener('mouseleave', handlePointerEnd);
+    overlay.addEventListener('touchend', handlePointerEnd);
   }
 
   function _mktToggle(carId) {
