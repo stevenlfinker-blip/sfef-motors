@@ -3,7 +3,7 @@ const Cars = (() => {
   let _catFilter = 'All';
 
   const STATUS_OPTS    = ['Active', 'Restoration', 'Storage', 'For Sale'];
-  const OWNERSHIP_OPTS = ['Free and clear', 'Lease', 'Financed', 'Under Management', 'Other'];
+  const OWNERSHIP_OPTS = ['Owned', 'Lease', 'Financed', 'Under Management', 'Other'];
   const CATEGORY_OPTS  = ['Collectable', 'Daily', 'Lease'];
 
   const CAT_META = {
@@ -126,7 +126,8 @@ const Cars = (() => {
   function ownershipBadge(o) {
     if (!o) return '';
     const colors = {
-      'Free and clear':   ['var(--green-dim)',  'var(--green)'],
+      'Owned':            ['var(--green-dim)',  'var(--green)'],
+      'Free and clear':   ['var(--green-dim)',  'var(--green)'],  // legacy
       'Lease':            ['var(--blue-dim)',   'var(--blue)'],
       'Financed':         ['var(--orange-dim)', 'var(--orange)'],
       'Under Management': ['var(--purple-dim)', 'var(--purple)'],

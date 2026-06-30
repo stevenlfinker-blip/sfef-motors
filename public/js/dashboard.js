@@ -156,17 +156,98 @@ const Dashboard = (() => {
       </div>`;
   }
 
+  // ── Chart interaction state ───────────────────────
+  let _mktChart = null;
+
+  function _mktFmtK(n) {
+    if (!n) return '—';
+    if (n >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
+    return '$' + Math.round(n / 1000) + 'K';
+  }
+
+  function _initMktChart() {
+    const svg = document.getElementById('mkt-svg');
+    if (!svg || !_mktChart) return;
+    const overlay  = document.getElementById('mkt-overlay');
+    const xhair    = document.getElementById('mkt-xhair');
+    const tooltip  = document.getElementById('mkt-tooltip');
+    const { carData, W, PAD, chartW, chartH, xMin, xMax, baseY } = _mktChart;
+
+    overlay.addEventListener('mousemove', e => {
+      const rect  = svg.getBoundingClientRect();
+      const svgX  = (e.clientX - rect.left) * (W / rect.width);
+      const t     = xMin + ((svgX - PAD.left) / chartW) * (xMax - xMin);
+
+      // Find the month all cars share closest to cursor
+      let snapT = null, snapDist = Infinity;
+      for (const c of carData) {
+        for (const p of c.pts) {
+          const d = Math.abs(p.t - t);
+          if (d < snapDist) { snapDist = d; snapT = p.t; }
+        }
+      }
+      if (snapT === null) return;
+
+      // Crosshair at snapped X
+      const snapX = PAD.left + ((snapT - xMin) / (xMax - xMin)) * chartW;
+      xhair.setAttribute('x1', snapX.toFixed(1));
+      xhair.setAttribute('x2', snapX.toFixed(1));
+      xhair.style.display = '';
+
+      // Tooltip rows for each visible car
+      const rows = [];
+      for (const c of carData) {
+        const g = document.getElementById(`mkt-g-${c.id}`);
+        if (g && g.dataset.hidden === '1') continue;
+        const p = c.pts.reduce((best, pt) =>
+          Math.abs(pt.t - snapT) < Math.abs(best.t - snapT) ? pt : best, c.pts[0]);
+        if (!p) continue;
+        const dot = document.getElementById(`mkt-dot-${c.id}`);
+        if (dot) { dot.setAttribute('cx', p.x.toFixed(1)); dot.setAttribute('cy', p.y.toFixed(1)); dot.style.display = ''; }
+        rows.push(`<div style="display:flex;align-items:center;gap:7px;padding:2px 0">
+          <span style="width:7px;height:7px;border-radius:50%;background:${c.color};flex-shrink:0"></span>
+          <span style="color:#8a9bb5;flex:1;font-size:10px;white-space:nowrap">${escHtml(c.shortLabel)}</span>
+          <span style="color:${c.color};font-weight:700;font-size:11px">${_mktFmtK(p.avg)}</span>
+        </div>`);
+      }
+
+      tooltip.innerHTML = `<div style="color:#4a5a7a;font-size:9px;font-weight:600;letter-spacing:.05em;margin-bottom:5px">${new Date(snapT).toLocaleDateString('en-US',{month:'short',year:'numeric'})}</div>${rows.join('')}`;
+      tooltip.style.display = 'block';
+      const tx = Math.min(e.clientX + 16, window.innerWidth - 190);
+      const ty = Math.max(e.clientY - 30, 8);
+      tooltip.style.left = tx + 'px';
+      tooltip.style.top  = ty + 'px';
+    });
+
+    overlay.addEventListener('mouseleave', () => {
+      xhair.style.display = 'none';
+      tooltip.style.display = 'none';
+      carData.forEach(c => {
+        const dot = document.getElementById(`mkt-dot-${c.id}`);
+        if (dot) dot.style.display = 'none';
+      });
+    });
+  }
+
+  function _mktToggle(carId) {
+    if (!_mktChart) return;
+    const g   = document.getElementById(`mkt-g-${carId}`);
+    const btn = document.getElementById(`mkt-leg-${carId}`);
+    if (!g) return;
+    const hidden = g.dataset.hidden === '1';
+    g.dataset.hidden  = hidden ? '0' : '1';
+    g.style.opacity   = hidden ? '1' : '0.12';
+    if (btn) btn.style.opacity = hidden ? '1' : '0.3';
+  }
+
   // ── Widget: Collectibles Market Intelligence ──────
-  function collectiblesMarketWidget(cars, valuationMap) {
-    const TREND_COLOR = {
-      Appreciating: '#00e5a0',
-      Stable:       '#00d4ff',
-      Depreciating: '#ff3a5c',
-    };
+  function collectiblesMarketWidget(cars, valuationMap, history) {
+    const CAR_COLORS = ['#00e5a0','#00d4ff','#facc15','#ff6a00','#7c4dff','#ff3a5c','#f472b6','#a3e635'];
+    const TREND_COLOR = { Appreciating: '#00e5a0', Stable: '#00d4ff', Depreciating: '#ff3a5c' };
 
     const collectibles = cars
       .filter(c => c.category === 'Collectable')
-      .map(c => ({ ...c, val: valuationMap[c.id] }))
+      .map((c, i) => ({ ...c, val: valuationMap[c.id], color: CAR_COLORS[i % CAR_COLORS.length] }))
       .filter(c => c.val && c.val.avg > 0);
 
     if (collectibles.length === 0) {
@@ -176,62 +257,161 @@ const Dashboard = (() => {
       </div></div>`;
     }
 
-    function fmtK(n) {
-      if (!n) return '—';
-      if (n >= 1000000) return '$' + (n / 1000000).toFixed(2) + 'M';
-      return '$' + Math.round(n / 1000) + 'K';
+    // Deduplicate history: one entry per car per calendar month (latest wins)
+    const byCarId = {};
+    for (const v of (history || [])) {
+      const mo = v.fetched_at.slice(0, 7);
+      if (!byCarId[v.car_id]) byCarId[v.car_id] = {};
+      const ex = byCarId[v.car_id][mo];
+      if (!ex || v.fetched_at > ex.fetched_at) byCarId[v.car_id][mo] = v;
     }
 
-    // Range bar chart: low────[avg]────high per car
-    const maxVal = Math.max(...collectibles.map(c => c.val.high || 0), 1);
-    const W = 700, PAD_L = 155, PAD_R = 65, PAD_T = 12, PAD_B = 12;
-    const ROW_H = 36, BAR_H = 8;
-    const H = PAD_T + collectibles.length * ROW_H + PAD_B;
-    const chartW = W - PAD_L - PAD_R;
+    // Chart constants
+    const W = 700, H = 220;
+    const PAD = { top: 16, right: 20, bottom: 28, left: 62 };
+    const chartW = W - PAD.left - PAD.right;
+    const chartH = H - PAD.top - PAD.bottom;
 
-    const svgRows = collectibles.map((c, i) => {
-      const midY  = PAD_T + i * ROW_H + ROW_H / 2;
-      const color = TREND_COLOR[c.val.trend] || '#00d4ff';
-      const xLow  = PAD_L + ((c.val.low  || 0) / maxVal) * chartW;
-      const xAvg  = PAD_L + ((c.val.avg  || 0) / maxVal) * chartW;
-      const xHigh = PAD_L + ((c.val.high || 0) / maxVal) * chartW;
-      const name  = `${c.year} ${c.make} ${c.model}`;
-      const label = name.length > 24 ? name.slice(0, 22) + '…' : name;
+    // Pass 1: collect raw timestamps + avgs to determine axis ranges
+    const rawByCarId = collectibles.map(c => {
+      const monthMap = byCarId[c.id] || {};
+      const sorted = Object.values(monthMap).sort((a, b) => a.fetched_at.localeCompare(b.fetched_at));
+      const latestMo = Object.keys(monthMap).sort().pop() || '';
+      if (!latestMo.startsWith(c.val.fetched_at.slice(0,7))) sorted.push(c.val);
+      else sorted[sorted.length - 1] = monthMap[latestMo];
+      return sorted;
+    });
 
-      return `
-        <text x="${PAD_L - 8}" y="${midY + 4}" text-anchor="end" fill="#c0c8d8" font-size="10">${label}</text>
-        <rect x="${xLow.toFixed(1)}" y="${(midY - BAR_H/2).toFixed(1)}" width="${Math.max(0, xHigh - xLow).toFixed(1)}" height="${BAR_H}" fill="${color}" opacity="0.2" rx="2"/>
-        <line x1="${xLow.toFixed(1)}" y1="${(midY - BAR_H/2 - 2).toFixed(1)}" x2="${xLow.toFixed(1)}" y2="${(midY + BAR_H/2 + 2).toFixed(1)}" stroke="${color}" stroke-width="1.5" opacity="0.5"/>
-        <line x1="${xHigh.toFixed(1)}" y1="${(midY - BAR_H/2 - 2).toFixed(1)}" x2="${xHigh.toFixed(1)}" y2="${(midY + BAR_H/2 + 2).toFixed(1)}" stroke="${color}" stroke-width="1.5" opacity="0.5"/>
-        <rect x="${(xAvg - 2).toFixed(1)}" y="${(midY - BAR_H/2 - 2).toFixed(1)}" width="4" height="${BAR_H + 4}" fill="${color}" rx="1"/>
-        <text x="${(xHigh + 5).toFixed(1)}" y="${(midY + 4).toFixed(1)}" fill="${color}" font-size="9" font-weight="bold">${fmtK(c.val.avg)}</text>
-        <text x="${xLow.toFixed(1)}" y="${(midY - BAR_H/2 - 4).toFixed(1)}" fill="#6b7a99" font-size="8">${fmtK(c.val.low)}</text>`;
+    const allTs   = rawByCarId.flat().map(p => new Date(p.fetched_at).getTime());
+    const allAvgs = rawByCarId.flat().map(p => p.avg).filter(Boolean);
+
+    // Dynamic range: earliest point (with small left pad) → latest point + ~5 weeks right pad
+    const xMin = allTs.length ? Math.min(...allTs) - 15 * 24 * 3600 * 1000 : Date.now() - 365 * 24 * 3600 * 1000;
+    const xMax = allTs.length ? Math.max(...allTs) + 35 * 24 * 3600 * 1000 : Date.now();
+
+    const yMin = allAvgs.length ? Math.floor(Math.min(...allAvgs) * 0.85 / 50000) * 50000 : 0;
+    const yMax = collectibles.reduce((m, c) => Math.max(m, c.val.high || c.val.avg || 0), 0) * 1.05;
+    const baseY = PAD.top + chartH;
+
+    function xOf(t) { return PAD.left + ((t - xMin) / (xMax - xMin)) * chartW; }
+    function yOf(v) { return PAD.top + chartH - ((v - yMin) / (yMax - yMin)) * chartH; }
+
+    function smoothPath(pts) {
+      if (pts.length === 1) return `M ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+      let d = `M ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+      for (let i = 1; i < pts.length; i++) {
+        const prev = pts[i-1], curr = pts[i];
+        const cpx = (prev.x + curr.x) / 2;
+        d += ` C ${cpx.toFixed(1)},${prev.y.toFixed(1)} ${cpx.toFixed(1)},${curr.y.toFixed(1)} ${curr.x.toFixed(1)},${curr.y.toFixed(1)}`;
+      }
+      return d;
+    }
+
+    // Pass 2: build per-car data with screen coords (now that xOf/yOf are defined)
+    const carData = collectibles.map((c, i) => {
+      const pts = rawByCarId[i].map(p => ({
+        t:   new Date(p.fetched_at).getTime(),
+        avg: p.avg,
+        x:   xOf(new Date(p.fetched_at).getTime()),
+        y:   yOf(p.avg || 0),
+      }));
+
+      return {
+        id:         c.id,
+        color:      c.color,
+        shortLabel: `${c.year} ${c.make.split(' ')[0]} ${c.model.split(' ')[0]}`,
+        val:        c.val,
+        pts,
+      };
+    });
+
+    // Store for mouse handler
+    _mktChart = { carData, W, H, PAD, chartW, chartH, xMin, xMax, yMin, yMax, baseY };
+
+    // Grid
+    const gridLines = [0.25, 0.5, 0.75, 1].map(f => {
+      const v = yMin + f * (yMax - yMin);
+      const y = yOf(v).toFixed(1);
+      const label = v >= 1000000 ? '$' + (v/1000000).toFixed(1)+'M' : '$' + Math.round(v/1000)+'K';
+      return `<line x1="${PAD.left}" y1="${y}" x2="${W-PAD.right}" y2="${y}" stroke="#151e2e" stroke-width="1"/>
+        <text x="${PAD.left-5}" y="${(+y+3.5).toFixed(1)}" text-anchor="end" fill="#3d4f6a" font-size="9">${label}</text>`;
     }).join('');
 
-    const svgChart = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">
-      <line x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${H - PAD_B}" stroke="#2a3347" stroke-width="1"/>
-      ${svgRows}
-    </svg>`;
+    // Dynamic X axis labels: one label every other month across the data range
+    const axisLabels = (() => {
+      const labels = [];
+      const start = new Date(xMin);
+      start.setDate(1);
+      const end   = new Date(xMax);
+      let cur = new Date(start.getFullYear(), start.getMonth(), 15);
+      let idx = 0;
+      while (cur.getTime() < end.getTime()) {
+        if (idx % 2 === 0) {
+          const x = xOf(cur.getTime()).toFixed(1);
+          const mo  = cur.toLocaleDateString('en-US', { month: 'short' });
+          const yr  = String(cur.getFullYear()).slice(2);
+          const isJan = cur.getMonth() === 0;
+          labels.push(`<text x="${x}" y="${(baseY+14).toFixed(1)}" text-anchor="middle" fill="#3d4f6a" font-size="9">${isJan ? mo + " '" + yr : mo}</text>`);
+        }
+        cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 15);
+        idx++;
+      }
+      return labels.join('');
+    })();
 
-    // Legend
-    const legend = Object.entries(TREND_COLOR).map(([label, color]) =>
-      `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:14px;font-size:9px;color:${color}">
-        <span style="width:10px;height:3px;background:${color};display:inline-block;border-radius:1px"></span>${label}
-      </span>`
+    // SVG car groups
+    const carPaths = carData.map(c => {
+      if (!c.pts.length) return '';
+      const lineD = smoothPath(c.pts);
+      const areaD = `M ${c.pts[0].x.toFixed(1)},${baseY} ` + lineD.slice(1) + ` L ${c.pts[c.pts.length-1].x.toFixed(1)},${baseY} Z`;
+      const last  = c.pts[c.pts.length - 1];
+      return `<g id="mkt-g-${c.id}" data-hidden="0" style="transition:opacity .2s">
+        <path d="${areaD}" fill="${c.color}" opacity="0.09"/>
+        <path d="${lineD}" fill="none" stroke="${c.color}" stroke-width="2" opacity="0.9" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.5" fill="${c.color}"/>
+      </g>`;
+    }).join('');
+
+    // Hover dots (one per car, repositioned on mousemove)
+    const hoverDots = carData.map(c =>
+      `<circle id="mkt-dot-${c.id}" r="4" fill="${c.color}" stroke="#0d1421" stroke-width="1.5" style="display:none"/>`
     ).join('');
 
-    // Research notes per car
-    const notes = collectibles.map(c => {
-      const color     = TREND_COLOR[c.val.trend] || '#00d4ff';
+    const svgChart = `<svg id="mkt-svg" viewBox="0 0 ${W} ${H}" style="width:100%;display:block;cursor:crosshair">
+      <line x1="${PAD.left}" y1="${baseY}" x2="${W-PAD.right}" y2="${baseY}" stroke="#2a3347" stroke-width="1"/>
+      ${gridLines}
+      ${carPaths}
+      ${hoverDots}
+      ${axisLabels}
+      <line id="mkt-xhair" x1="0" y1="${PAD.top}" x2="0" y2="${baseY}" stroke="rgba(255,255,255,0.18)" stroke-width="1" stroke-dasharray="3,3" style="display:none"/>
+      <rect id="mkt-overlay" x="${PAD.left}" y="${PAD.top}" width="${chartW}" height="${chartH}" fill="transparent"/>
+    </svg>
+    <div id="mkt-tooltip" style="display:none;position:fixed;background:#111827;border:1px solid #1e2d45;border-radius:5px;padding:8px 12px;pointer-events:none;z-index:9999;min-width:170px;box-shadow:0 6px 24px rgba(0,0,0,.6)"></div>`;
+
+    // Clickable legend
+    const legend = collectibles.map((c, i) => {
+      const cd = carData[i];
+      return `<button id="mkt-leg-${c.id}" onclick="Dashboard._mktToggle(${c.id})"
+        style="display:inline-flex;align-items:center;gap:6px;margin:0 8px 6px 0;font-size:10px;color:${c.color};background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.08);border-radius:3px;padding:4px 9px;cursor:pointer;transition:opacity .2s;font-family:inherit">
+        <span style="width:14px;height:2px;background:${c.color};display:inline-block;border-radius:1px;flex-shrink:0"></span>
+        ${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}
+        <span style="opacity:.55;margin-left:2px">${_mktFmtK(c.val.avg)}</span>
+      </button>`;
+    }).join('');
+
+    // Research notes
+    const notes = collectibles.map((c, i) => {
+      const tColor    = TREND_COLOR[c.val.trend] || '#00d4ff';
       const trendIcon = { Appreciating: '▲', Stable: '●', Depreciating: '▼' }[c.val.trend] || '●';
       return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
+          <span style="width:8px;height:8px;border-radius:50%;background:${c.color};flex-shrink:0"></span>
           <span style="font-size:11px;font-weight:600;color:var(--text)">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</span>
-          <span style="font-size:9px;padding:1px 7px;border-radius:2px;background:rgba(0,0,0,.35);border:1px solid ${color};color:${color}">${trendIcon} ${escHtml(c.val.trend || '')}</span>
-          <span style="font-size:11px;font-weight:700;color:${color};margin-left:auto">${fmt$(c.val.avg)}</span>
+          <span style="font-size:9px;padding:1px 7px;border-radius:2px;background:rgba(0,0,0,.35);border:1px solid ${tColor};color:${tColor}">${trendIcon} ${escHtml(c.val.trend||'')}</span>
+          <span style="font-size:11px;font-weight:700;color:${c.color};margin-left:auto">${fmt$(c.val.avg)}</span>
           <span style="font-size:10px;color:var(--text-muted)">${fmt$(c.val.low)} – ${fmt$(c.val.high)}</span>
         </div>
-        <div style="font-size:10px;color:var(--text-muted);line-height:1.6">${escHtml(c.val.market_note || 'No research note available.')}</div>
+        <div style="font-size:10px;color:var(--text-muted);line-height:1.6">${escHtml(c.val.market_note||'No research note available.')}</div>
         <div style="font-size:9px;color:var(--text-muted);margin-top:5px">Updated ${_fmtValDate(c.val.fetched_at)}</div>
       </div>`;
     }).join('');
@@ -242,8 +422,8 @@ const Dashboard = (() => {
         <span style="font-size:10px;color:var(--text-muted)">Live auction comps · AI valuation research · ${collectibles.length} vehicles</span>
       </div>
       <div class="dash-panel-body" style="padding:8px 0 0">
-        <div style="margin-bottom:4px">${legend}</div>
-        <div style="margin-bottom:12px">${svgChart}</div>
+        <div style="margin-bottom:10px;display:flex;flex-wrap:wrap">${legend}</div>
+        <div style="margin-bottom:12px;position:relative">${svgChart}</div>
         <div style="padding-top:8px;border-top:1px solid var(--border)">
           <div style="font-size:9px;color:var(--text-muted);font-weight:600;letter-spacing:.08em;margin-bottom:2px">RESEARCH NOTES</div>
           ${notes}
@@ -737,7 +917,7 @@ const Dashboard = (() => {
   async function load() {
     const el = document.getElementById('dashboard-content');
     try {
-      const [cars, maint, parts, tools, cleaning, costs, events, watchlist, marketVals] = await Promise.all([
+      const [cars, maint, parts, tools, cleaning, costs, events, watchlist, marketVals, marketHistory] = await Promise.all([
         API.get('/api/cars'),
         API.get('/api/maintenance'),
         API.get('/api/parts'),
@@ -747,13 +927,14 @@ const Dashboard = (() => {
         API.get('/api/events'),
         API.get('/api/watchlist'),
         API.get('/api/market').catch(() => []),
+        API.get('/api/market/history').catch(() => []),
       ]);
       const valuationMap = {};
       marketVals.forEach(v => { valuationMap[v.car_id] = v; });
 
       el.innerHTML =
         hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist, valuationMap) +
-        collectiblesMarketWidget(cars, valuationMap) +
+        collectiblesMarketWidget(cars, valuationMap, marketHistory) +
         '<div class="dash-grid-2-wide" style="margin-top:12px">' +
           monthlySpendWidget(costs) +
           spendByCatWidget(costs) +
@@ -768,6 +949,7 @@ const Dashboard = (() => {
         '<div class="dash-full">' + upcomingEventsWidget(events) + '</div>' +
         '<div class="dash-full">' + pendingMaintWidget(maint) + '</div>';
       startHudClock();
+      _initMktChart();
     } catch (err) {
       if (err.message === 'Session expired') return;
       el.innerHTML = `<div style="color:var(--red);padding:20px">Failed to load dashboard: ${escHtml(err.message)}<br>
@@ -816,5 +998,5 @@ const Dashboard = (() => {
     } catch (e) { Toast.show('Failed to delete', 'error'); }
   }
 
-  return { load, watchlistAdd, watchlistEdit, watchlistDel };
+  return { load, watchlistAdd, watchlistEdit, watchlistDel, _mktToggle };
 })();

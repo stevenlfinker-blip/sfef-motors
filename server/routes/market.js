@@ -134,6 +134,19 @@ Respond with ONLY a valid JSON object — no preamble, no explanation outside th
 }`;
 }
 
+// GET full valuation history for collectible cars (for area chart)
+router.get('/history', (req, res) => {
+  const rows = db.prepare(`
+    SELECT cv.car_id, cv.low, cv.avg, cv.high, cv.trend, cv.fetched_at,
+           c.make, c.model, c.year, c.category
+    FROM car_valuations cv
+    JOIN cars c ON c.id = cv.car_id
+    WHERE c.category = 'Collectable'
+    ORDER BY cv.car_id, cv.fetched_at ASC
+  `).all();
+  res.json(rows);
+});
+
 // GET all latest valuations (one per car)
 router.get('/', (req, res) => {
   const rows = db.prepare(`
