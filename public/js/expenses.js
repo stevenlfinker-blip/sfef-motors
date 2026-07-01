@@ -34,7 +34,7 @@ const Expenses = (() => {
     const carSel = document.getElementById('expenses-filter-car');
     const curCar = carSel.value;
     carSel.innerHTML = '<option value="">All Cars</option><option value="0">General (No Car)</option>' +
-      _cars.map(c => `<option value="${c.id}" ${curCar == c.id ? 'selected':''}>${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</option>`).join('');
+      _cars.map(c => `<option value="${c.id}" ${curCar == c.id ? 'selected':''}>${carLabel(c)}</option>`).join('');
 
     const catSel = document.getElementById('expenses-filter-cat');
     const curCat = catSel.value;
@@ -161,7 +161,7 @@ const Expenses = (() => {
   }
 
   function _carOpts(selectedId) {
-    return _cars.map(c => `<option value="${c.id}" ${selectedId == c.id ? 'selected':''}>${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</option>`).join('');
+    return _cars.map(c => `<option value="${c.id}" ${selectedId == c.id ? 'selected':''}>${carLabel(c)}</option>`).join('');
   }
 
   function _catOpts(selectedType, selectedCat) {

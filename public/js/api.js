@@ -47,3 +47,9 @@ function daysUntil(dateStr) {
 function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function carLabel(c) {
+  return `${escHtml(c.make)} ${escHtml(c.model)} ${escHtml(c.year)}`;
+}
+function carLabelRaw(c) {
+  return `${c.make} ${c.model} ${c.year || ''}`.trim();
+}

@@ -97,8 +97,8 @@ const Market = (() => {
     return `<div class="car-card" id="market-card-${car.id}">
       <div class="car-card-header">
         <div class="car-card-info">
-          <div class="car-card-year">${escHtml(car.year)}</div>
           <div class="car-card-name">${escHtml(car.make)} ${escHtml(car.model)}</div>
+          <div class="car-card-year">${escHtml(car.year)}</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:10px;color:var(--text-muted)">Stored</div>

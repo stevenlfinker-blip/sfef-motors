@@ -14,7 +14,7 @@ const Maintenance = (() => {
     const sel = document.getElementById('maint-filter-car');
     const cur = sel.value;
     sel.innerHTML = '<option value="">All Cars</option>' +
-      _cars.map(c => `<option value="${c.id}" ${cur == c.id ? 'selected':''}>${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</option>`).join('');
+      _cars.map(c => `<option value="${c.id}" ${cur == c.id ? 'selected':''}>${carLabel(c)}</option>`).join('');
   }
 
   function _status(m) {
@@ -61,7 +61,7 @@ const Maintenance = (() => {
   }
 
   function _carOpts(selectedId) {
-    return _cars.map(c => `<option value="${c.id}" ${selectedId == c.id ? 'selected' : ''}>${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</option>`).join('');
+    return _cars.map(c => `<option value="${c.id}" ${selectedId == c.id ? 'selected' : ''}>${carLabel(c)}</option>`).join('');
   }
 
   function formHtml(m = {}) {

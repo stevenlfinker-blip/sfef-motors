@@ -41,7 +41,7 @@ const upload = multer({
 
 const SELECT = `
   SELECT ex.id, ex.car_id, ex.expense_type, ex.vendor, ex.category, ex.description, ex.amount, ex.date, ex.receipt_path, ex.notes,
-         c.year || ' ' || c.make || ' ' || c.model AS car_name
+         c.make || ' ' || c.model || ' ' || c.year AS car_name
   FROM expenses ex LEFT JOIN cars c ON ex.car_id = c.id
 `;
 

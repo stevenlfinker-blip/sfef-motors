@@ -340,7 +340,7 @@ const Dashboard = (() => {
       return {
         id:         c.id,
         color:      c.color,
-        shortLabel: `${c.year} ${c.make.split(' ')[0]} ${c.model.split(' ')[0]}`,
+        shortLabel: `${c.make.split(' ')[0]} ${c.model.split(' ')[0]} ${c.year}`,
         val:        c.val,
         pts,
       };
@@ -429,7 +429,7 @@ const Dashboard = (() => {
       return `<button id="mkt-leg-${c.id}" onclick="Dashboard._mktToggle(${c.id})"
         style="display:inline-flex;align-items:center;gap:6px;margin:0 8px 6px 0;font-size:10px;color:${c.color};background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.08);border-radius:3px;padding:4px 9px;cursor:pointer;transition:opacity .2s;font-family:inherit">
         <span style="width:14px;height:2px;background:${c.color};display:inline-block;border-radius:1px;flex-shrink:0"></span>
-        ${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}
+        ${carLabel(c)}
         <span style="opacity:.55;margin-left:2px">${_mktFmtK(c.val.avg)}</span>
       </button>`;
     }).join('');
@@ -441,7 +441,7 @@ const Dashboard = (() => {
       return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
           <span style="width:8px;height:8px;border-radius:50%;background:${c.color};flex-shrink:0"></span>
-          <span style="font-size:11px;font-weight:600;color:var(--text)">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</span>
+          <span style="font-size:11px;font-weight:600;color:var(--text)">${carLabel(c)}</span>
           <span style="font-size:9px;padding:1px 7px;border-radius:2px;background:rgba(0,0,0,.35);border:1px solid ${tColor};color:${tColor}">${trendIcon} ${escHtml(c.val.trend||'')}</span>
           <span style="font-size:11px;font-weight:700;color:${c.color};margin-left:auto">${fmt$(c.val.avg)}</span>
           <span style="font-size:10px;color:var(--text-muted)">${fmt$(c.val.low)} – ${fmt$(c.val.high)}</span>
@@ -542,7 +542,7 @@ const Dashboard = (() => {
       const color = STATUS_COLOR[c.status] || 'var(--accent)';
       return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border)">
         <div style="min-width:130px;max-width:140px">
-          <div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</div>
+          <div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${carLabel(c)}</div>
         </div>
         <div class="mile-bar-track">
           <div class="mile-bar-fill" style="width:${pct}%;background:${color}"></div>
@@ -587,8 +587,8 @@ const Dashboard = (() => {
       const color = scoreColor(s);
       return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
         <div style="min-width:110px;max-width:120px">
-          <div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.year)} ${escHtml(c.make)}</div>
-          <div style="font-size:10px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.model)}</div>
+          <div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.make)}</div>
+          <div style="font-size:10px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(c.model)} ${escHtml(c.year)}</div>
         </div>
         <div class="health-bar-track">
           <div class="health-bar-fill" style="width:${s}%;background:${color}"></div>
@@ -612,7 +612,7 @@ const Dashboard = (() => {
   function expiryAlertsWidget(cars) {
     const alerts = [];
     for (const c of cars) {
-      const name = `${c.year} ${c.make} ${c.model}`;
+      const name = carLabelRaw(c);
       if (c.registration) {
         const d = daysFromNow(c.registration);
         alerts.push({ name, label: 'Registration', date: c.registration, days: d });
@@ -667,7 +667,7 @@ const Dashboard = (() => {
     const rows = items.map(w => `
       <div class="dash-row" style="align-items:flex-start">
         <div style="flex:1;min-width:0">
-          <div class="dash-row-label">${escHtml(w.year ? w.year+' ' : '')}${escHtml(w.make)} ${escHtml(w.model)}</div>
+          <div class="dash-row-label">${escHtml(w.make)} ${escHtml(w.model)}${escHtml(w.year ? ' '+w.year : '')}</div>
           <div class="dash-row-meta">${w.source ? escHtml(w.source)+' · ' : ''}${w.asking_price ? fmt$(w.asking_price) : 'Price TBD'}</div>
         </div>
         <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
@@ -693,7 +693,7 @@ const Dashboard = (() => {
     const items = [];
     const push = (arr, fn) => [...arr].slice(-4).reverse().forEach(r => items.push({ id: r.id, ...fn(r) }));
 
-    push(cars,     c => ({ icon: '◉', label: `${c.year||''} ${c.make} ${c.model}`.trim(), sub: c.status, color: 'var(--green)' }));
+    push(cars,     c => ({ icon: '◉', label: `${c.make} ${c.model} ${c.year||''}`.trim(), sub: c.status, color: 'var(--green)' }));
     push(maint,    m => ({ icon: '⚙', label: m.title, sub: m.car_name || 'General', color: 'var(--orange)' }));
     push(parts,    p => ({ icon: '⊞', label: p.name, sub: p.car_name || 'Spare part', color: 'var(--accent)' }));
     push(tools,    t => ({ icon: '⊕', label: t.name, sub: t.category || 'Tool', color: 'var(--accent)' }));
@@ -746,7 +746,7 @@ const Dashboard = (() => {
 
       return `<div style="padding:6px 0;border-bottom:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px;gap:8px">
-          <span style="font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</span>
+          <span style="font-size:11px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${carLabel(c)}</span>
           <div style="text-align:right;flex-shrink:0">
             <span style="font-size:12px;color:${accentVar};font-weight:600">${market ? fmt$(market) : '—'}</span>
             ${paid ? `<span style="font-size:10px;color:var(--text-muted);margin-left:6px">pd ${fmt$(paid)}</span>` : ''}
@@ -884,7 +884,7 @@ const Dashboard = (() => {
     function row(c) {
       return `<div class="dash-row">
         <div>
-          <div class="dash-row-label">${escHtml(c.year)} ${escHtml(c.make)} ${escHtml(c.model)}</div>
+          <div class="dash-row-label">${carLabel(c)}</div>
           <div class="dash-row-meta">${escHtml(c.color||'—')} · ${escHtml(c.mileage||'0')} mi${c.value ? ' · ' + fmt$(c.value) : ''}</div>
         </div>
         <span class="badge ${STATUS_BADGE[c.status]||'badge-neutral'}">${escHtml(c.status)}</span>

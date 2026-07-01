@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../db');
 
 const SELECT = `
-  SELECT m.*, c.year || ' ' || c.make || ' ' || c.model AS car_name
+  SELECT m.*, c.make || ' ' || c.model || ' ' || c.year AS car_name
   FROM maintenance m LEFT JOIN cars c ON m.car_id = c.id
 `;
 

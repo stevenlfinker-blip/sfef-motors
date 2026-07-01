@@ -1,4 +1,4 @@
-const CACHE = 'sfef-v3';
+const CACHE = 'sfef-v4';
 const SHELL = [
   '/',
   '/css/styles.css',

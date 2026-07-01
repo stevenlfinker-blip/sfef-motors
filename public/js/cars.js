@@ -199,8 +199,8 @@ const Cars = (() => {
         <div class="car-card-header">
           <div class="car-accent-bar" style="background:${accentColor(c.status)}"></div>
           <div class="car-card-info">
-            <div class="car-card-year">${escHtml(c.year)}</div>
             <div class="car-card-name">${escHtml(c.make)} ${escHtml(c.model)}</div>
+            <div class="car-card-year">${escHtml(c.year)}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
             ${categoryBadge(c.category)}
