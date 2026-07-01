@@ -22,13 +22,15 @@ try { db.exec('ALTER TABLE costs RENAME TO expenses'); } catch (e) { /* already 
 try { db.exec("ALTER TABLE expenses ADD COLUMN vendor TEXT DEFAULT ''"); } catch (e) { /* already exists */ }
 // One-time migration: add expense_type column to expenses
 try { db.exec("ALTER TABLE expenses ADD COLUMN expense_type TEXT DEFAULT ''"); } catch (e) { /* already exists */ }
-// One-time migration: add category column to cars
-try { db.exec("ALTER TABLE cars ADD COLUMN category TEXT DEFAULT 'Daily'"); } catch (e) { /* already exists */ }
-// Set known categories for existing cars
+// One-time migration: add category column to cars, and backfill known
+// categories for pre-existing rows. Both run only when the column is
+// actually being added — never again — so later manual edits to a car's
+// category stick across restarts instead of being reset on every boot.
 try {
+  db.exec("ALTER TABLE cars ADD COLUMN category TEXT DEFAULT 'Daily'");
   db.exec("UPDATE cars SET category='Collectable' WHERE (make='Porsche' AND model NOT LIKE '%Macan%') OR (make='Ferrari') OR (make='Ford' AND year < 1980)");
   db.exec("UPDATE cars SET category='Lease' WHERE ownership='Lease'");
-} catch (e) { /* already set */ }
+} catch (e) { /* already exists */ }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS cars (
