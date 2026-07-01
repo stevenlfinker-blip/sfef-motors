@@ -1,4 +1,4 @@
-const CACHE = 'sfef-v4';
+const CACHE = 'sfef-v5';
 const SHELL = [
   '/',
   '/css/styles.css',
@@ -39,14 +39,16 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // App shell — cache first, fall back to network
+  // App shell — network first (always get current code when online),
+  // fall back to cache only when offline. This is what makes deploys
+  // show up immediately without ever needing to bump CACHE by hand.
   e.respondWith(
-    caches.match(request).then(cached => cached || fetch(request).then(res => {
+    fetch(request).then(res => {
       if (res.ok && request.method === 'GET') {
         const clone = res.clone();
         caches.open(CACHE).then(c => c.put(request, clone));
       }
       return res;
-    }))
+    }).catch(() => caches.match(request))
   );
 });
