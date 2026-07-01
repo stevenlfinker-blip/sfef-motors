@@ -11,9 +11,9 @@ const Expenses = (() => {
   ];
 
   const CATEGORIES = {
-    Operating:   ['Rent/Lease', 'Utilities', 'Insurance', 'Supplies', 'Tools', 'Security', 'Other'],
-    Maintenance: ['Fuel', 'Oil & Fluids', 'Tires', 'Brakes', 'Filters', 'Detailing', 'Registration', 'Inspection', 'Other'],
-    Restoration: ['Body Work', 'Paint', 'Engine', 'Transmission', 'Suspension', 'Interior', 'Electrical', 'Fabrication', 'Parts', 'Other'],
+    Operating:   ['Rent/Lease', 'Supplies', 'Other'],
+    Maintenance: ['Fuel', 'Parts & Service', 'Detailing', 'Other'],
+    Restoration: ['Body Work', 'Parts', 'Other'],
   };
   const ALL_CATEGORIES = [...new Set(Object.values(CATEGORIES).flat())];
 
