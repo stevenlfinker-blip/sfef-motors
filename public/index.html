@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SFEF Motors</title>
   <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
   <!-- iOS PWA -->
@@ -81,6 +82,22 @@
         <span class="nav-icon">◷</span>
         <span class="nav-label">Events</span>
         <span class="nav-badge" id="badge-events">0</span>
+      </div>
+
+      <div class="nav-section-label">Marine</div>
+      <div class="nav-item" data-section="vessels">
+        <span class="nav-icon">⛵</span>
+        <span class="nav-label">Vessels</span>
+        <span class="nav-badge" id="badge-vessels">0</span>
+      </div>
+      <div class="nav-item" data-section="marinas">
+        <span class="nav-icon">⚓</span>
+        <span class="nav-label">Marinas</span>
+        <span class="nav-badge" id="badge-marinas">0</span>
+      </div>
+      <div class="nav-item" data-section="weather">
+        <span class="nav-icon">☁</span>
+        <span class="nav-label">Weather</span>
       </div>
     </nav>
 
@@ -383,6 +400,53 @@
       <div id="events-list"></div>
     </section>
 
+    <!-- Vessels / GPS Tracking -->
+    <section id="section-vessels" class="section">
+      <div class="section-header">
+        <div class="section-title">Marine <span>/ Vessels</span></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="Vessels.openAdd()">+ Add Vessel</button>
+        </div>
+      </div>
+      <div id="vessel-detail" class="hidden" style="margin-bottom:16px"></div>
+      <div id="vessels-grid" class="card-grid"></div>
+    </section>
+
+    <!-- Marinas -->
+    <section id="section-marinas" class="section">
+      <div class="section-header">
+        <div class="section-title">Marine <span>/ Marinas</span></div>
+        <div class="section-actions">
+          <button class="btn btn-primary" onclick="Marinas.openAdd()">+ Add Marina</button>
+        </div>
+      </div>
+      <div id="marinas-map" class="map-container" style="height:360px;margin-bottom:16px"></div>
+      <div class="filters-bar">
+        <input class="search-input" id="marinas-search" placeholder="Search marinas…" oninput="Marinas.render()">
+      </div>
+      <div id="marinas-grid" class="card-grid"></div>
+    </section>
+
+    <!-- Weather Planning -->
+    <section id="section-weather" class="section">
+      <div class="section-header">
+        <div class="section-title">Marine <span>/ Weather Planning</span></div>
+      </div>
+      <div class="filters-bar">
+        <select class="filter-select" id="weather-marina-select" onchange="Weather.selectMarina()">
+          <option value="">— Choose a marina —</option>
+        </select>
+        <select class="filter-select" id="weather-vessel-select" onchange="Weather.selectVessel()">
+          <option value="">— Or a vessel's last position —</option>
+        </select>
+        <input class="filter-select" type="text" id="weather-lat" placeholder="Lat" style="max-width:100px">
+        <input class="filter-select" type="text" id="weather-lon" placeholder="Lon" style="max-width:100px">
+        <button class="btn btn-primary" onclick="Weather.fetchForecast()">Get Forecast</button>
+      </div>
+      <div id="weather-location-label" style="font-size:12px;color:var(--text-muted);margin-bottom:12px"></div>
+      <div id="weather-content"></div>
+    </section>
+
   </main>
 </div>
 
@@ -466,6 +530,7 @@
 <div id="toast-container"></div>
 
 <!-- ── Scripts ── -->
+<script src="/vendor/leaflet/leaflet.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/dashboard.js"></script>
 <script src="/js/app.js"></script>
@@ -478,6 +543,10 @@
 <script src="/js/market.js"></script>
 <script src="/js/expenses.js"></script>
 <script src="/js/events.js"></script>
+<script src="/js/marine-map.js"></script>
+<script src="/js/vessels.js"></script>
+<script src="/js/marinas.js"></script>
+<script src="/js/weather.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});

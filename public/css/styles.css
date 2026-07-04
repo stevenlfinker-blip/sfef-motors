@@ -782,6 +782,22 @@ th.sortable:hover { color: var(--accent); }
 .badge-priority-medium { background: rgba(255,106,0,.15);  color: var(--orange); }
 .badge-priority-low    { background: rgba(0,212,255,.12);  color: var(--accent); }
 
+/* ── Marine map ── */
+.map-container { width: 100%; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); background: var(--elevated); }
+.leaflet-container { background: var(--elevated); font-family: var(--font); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--card); color: var(--text); }
+.leaflet-control-zoom a { background: var(--card) !important; color: var(--text) !important; border-color: var(--border-light) !important; }
+.leaflet-control-attribution { background: rgba(7,22,32,.8) !important; color: var(--text-muted) !important; }
+.leaflet-control-attribution a { color: var(--accent) !important; }
+
+/* ── Weather forecast cards ── */
+.weather-scroll { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; }
+.weather-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; min-width: 140px; flex-shrink: 0; }
+.weather-card-name { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+.weather-card-temp { font-size: 22px; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+.weather-card-wind { font-size: 11px; color: var(--text); margin-bottom: 8px; }
+.weather-card-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+
 /* ── Activity feed ── */
 .activity-item {
   display: flex;

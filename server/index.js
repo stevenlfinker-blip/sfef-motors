@@ -121,6 +121,7 @@ app.use((req, res, next) => {
 // ── Protected static files & API ─────────────────
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'data', 'uploads')));
+app.use('/vendor/leaflet', express.static(path.join(__dirname, '..', 'node_modules', 'leaflet', 'dist')));
 
 app.use('/api/', apiLimiter);
 app.use('/api/import', importLimiter);
@@ -135,6 +136,9 @@ app.use('/api/market', require('./routes/market'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/watchlist', require('./routes/watchlist'));
+app.use('/api/vessels', require('./routes/vessels'));
+app.use('/api/marinas', require('./routes/marinas'));
+app.use('/api/weather', require('./routes/weather'));
 app.use('/api', require('./routes/import'));
 
 // ── Start ─────────────────────────────────────────

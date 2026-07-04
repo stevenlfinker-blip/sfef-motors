@@ -1,7 +1,9 @@
-const CACHE = 'sfef-v5';
+const CACHE = 'sfef-v6';
 const SHELL = [
   '/',
   '/css/styles.css',
+  '/vendor/leaflet/leaflet.css',
+  '/vendor/leaflet/leaflet.js',
   '/js/api.js',
   '/js/app.js',
   '/js/dashboard.js',
@@ -14,6 +16,10 @@ const SHELL = [
   '/js/market.js',
   '/js/expenses.js',
   '/js/events.js',
+  '/js/marine-map.js',
+  '/js/vessels.js',
+  '/js/marinas.js',
+  '/js/weather.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
 ];

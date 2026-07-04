@@ -51,6 +51,9 @@ const SECTION_TITLES = {
   other:       'Inventory · Other',
   expenses:    'Finances · Expenses',
   events:      'Schedule · Events',
+  vessels:     'Marine · Vessels',
+  marinas:     'Marine · Marinas',
+  weather:     'Marine · Weather Planning',
 };
 
 const App = {
@@ -119,6 +122,9 @@ const App = {
       case 'market':      Market.load(); break;
       case 'expenses':    Expenses.load(); break;
       case 'events':      Events.load(); break;
+      case 'vessels':     Vessels.load(); break;
+      case 'marinas':     Marinas.load(); break;
+      case 'weather':     Weather.load(); break;
     }
   },
 
@@ -131,7 +137,7 @@ const App = {
 
   async refreshBadges() {
     try {
-      const [cars, maint, parts, tools, cleaning, events, other] = await Promise.all([
+      const [cars, maint, parts, tools, cleaning, events, other, vessels, marinas] = await Promise.all([
         API.get('/api/cars'),
         API.get('/api/maintenance'),
         API.get('/api/parts'),
@@ -139,6 +145,8 @@ const App = {
         API.get('/api/cleaning'),
         API.get('/api/events'),
         API.get('/api/other'),
+        API.get('/api/vessels'),
+        API.get('/api/marinas'),
       ]);
       document.getElementById('badge-cars').textContent = cars.length;
       document.getElementById('badge-maintenance').textContent = maint.filter(m => !m.completed).length;
@@ -150,6 +158,8 @@ const App = {
         const d = daysUntil(e.date);
         return d !== null && d >= 0;
       }).length;
+      document.getElementById('badge-vessels').textContent = vessels.length;
+      document.getElementById('badge-marinas').textContent = marinas.length;
     } catch (_) {}
   },
 

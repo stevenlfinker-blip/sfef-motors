@@ -153,7 +153,78 @@ db.exec(`
     notes TEXT DEFAULT '',
     added_date TEXT DEFAULT ''
   );
+
+  CREATE TABLE IF NOT EXISTS marinas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    lat REAL,
+    lon REAL,
+    address TEXT DEFAULT '',
+    phone TEXT DEFAULT '',
+    website TEXT DEFAULT '',
+    vhf_channel TEXT DEFAULT '',
+    fuel_diesel INTEGER DEFAULT 0,
+    fuel_gas INTEGER DEFAULT 0,
+    transient_slips INTEGER DEFAULT 0,
+    notes TEXT DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS vessels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT DEFAULT 'Powerboat',
+    make TEXT DEFAULT '',
+    model TEXT DEFAULT '',
+    year TEXT DEFAULT '',
+    hull_id TEXT DEFAULT '',
+    registration_number TEXT DEFAULT '',
+    registration_expiry TEXT DEFAULT '',
+    insurance_expiry TEXT DEFAULT '',
+    home_marina_id INTEGER,
+    garmin_mapshare_id TEXT DEFAULT '',
+    garmin_mapshare_password TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    FOREIGN KEY (home_marina_id) REFERENCES marinas(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS vessel_positions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vessel_id INTEGER NOT NULL,
+    lat REAL NOT NULL,
+    lon REAL NOT NULL,
+    recorded_at TEXT NOT NULL,
+    speed_knots REAL,
+    course_deg REAL,
+    elevation_m REAL,
+    event_label TEXT DEFAULT '',
+    source TEXT DEFAULT 'manual',
+    FOREIGN KEY (vessel_id) REFERENCES vessels(id) ON DELETE CASCADE
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_vessel_pos_unique ON vessel_positions(vessel_id, recorded_at);
 `);
+
+// ── Seed sample marinas (runs once if table is empty) ──────────────────────
+(function seedMarinas() {
+  const { n } = db.prepare('SELECT COUNT(*) as n FROM marinas').get();
+  if (n > 0) return;
+
+  const insert = db.prepare(`INSERT INTO marinas
+    (name, lat, lon, address, phone, website, vhf_channel, fuel_diesel, fuel_gas, transient_slips, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+
+  const SAMPLE_MARINAS = [
+    ['Miami Beach Marina', 25.7702, -80.1386, '300 Alton Rd, Miami Beach, FL', '(305) 673-6000', 'https://www.miamibeachmarina.com', '16', 1, 1, 1, 'Deep-water marina in South Beach, walk to Lincoln Road.'],
+    ['Bahia Mar Yachting Center', 26.1140, -80.1092, '801 Seabreeze Blvd, Fort Lauderdale, FL', '(954) 764-2233', 'https://www.bahiamarfortlauderdale.com', '16', 1, 1, 1, 'Home of the Fort Lauderdale Boat Show; full-service marina.'],
+    ['Newport Shipyard', 41.4870, -71.3260, '1 Washington St, Newport, RI', '(401) 846-6000', 'https://www.newportshipyard.com', '10', 1, 0, 1, 'Superyacht-capable marina in Newport Harbor.'],
+    ['Marina del Rey', 33.9803, -118.4517, '13560 Mindanao Way, Marina del Rey, CA', '(310) 305-9545', 'https://visitmarinadelrey.com', '16', 1, 1, 1, "Largest small-craft harbor on the West Coast."],
+    ['Shelter Island Marina', 32.7157, -117.2295, '1929 Shelter Island Dr, San Diego, CA', '(619) 224-0666', '', '16', 1, 1, 1, 'Sheltered anchorage in San Diego Bay.'],
+    ['Burnham Harbor', 41.8560, -87.6133, '1801 S Linn White Dr, Chicago, IL', '(312) 742-7673', 'https://www.chicagoharbors.info', '16', 0, 1, 1, 'Downtown Chicago harbor near Soldier Field.'],
+    ['Annapolis City Marina', 38.9787, -76.4875, '80 Compromise St, Annapolis, MD', '(410) 268-0660', '', '16', 1, 1, 1, 'Historic downtown Annapolis, steps from City Dock.'],
+    ['Sag Harbor Marina', 40.9995, -72.2970, '10 Bay St, Sag Harbor, NY', '(631) 725-0222', '', '9', 1, 1, 1, 'Protected harbor on the East End of Long Island.'],
+  ];
+
+  for (const m of SAMPLE_MARINAS) insert.run(...m);
+})();
 
 // ── Seed estimated market history (runs once if missing) ──────────────────────
 (function seedMarketHistory() {
