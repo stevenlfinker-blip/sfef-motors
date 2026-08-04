@@ -22,6 +22,10 @@ try { db.exec('ALTER TABLE costs RENAME TO expenses'); } catch (e) { /* already 
 try { db.exec("ALTER TABLE expenses ADD COLUMN vendor TEXT DEFAULT ''"); } catch (e) { /* already exists */ }
 // One-time migration: add expense_type column to expenses
 try { db.exec("ALTER TABLE expenses ADD COLUMN expense_type TEXT DEFAULT ''"); } catch (e) { /* already exists */ }
+// One-time migration: add car_label column to expenses — snapshot of a car's
+// name, written when the car is deleted, so its past expenses keep showing
+// under that car's category (archived) instead of collapsing into Garage.
+try { db.exec("ALTER TABLE expenses ADD COLUMN car_label TEXT DEFAULT ''"); } catch (e) { /* already exists */ }
 // One-time migration: add category column to cars, and backfill known
 // categories for pre-existing rows. Both run only when the column is
 // actually being added — never again — so later manual edits to a car's

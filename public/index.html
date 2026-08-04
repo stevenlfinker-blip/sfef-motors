@@ -321,16 +321,6 @@
       <div id="expense-summary-row"></div>
       <div class="filters-bar">
         <input class="filter-select" type="text" id="expenses-search" placeholder="Search vendor or description…" oninput="Expenses.render()" style="min-width:200px">
-        <select class="filter-select" id="expenses-filter-type" onchange="Expenses.render()">
-          <option value="">All Types</option>
-          <option value="Operating">Garage Operating</option>
-          <option value="Maintenance">Vehicle Maintenance</option>
-          <option value="Restoration">Restoration</option>
-        </select>
-        <select class="filter-select" id="expenses-filter-car" onchange="Expenses.render()">
-          <option value="">All Cars</option>
-          <option value="0">General (No Car)</option>
-        </select>
         <select class="filter-select" id="expenses-filter-cat" onchange="Expenses.render()">
           <option value="">All Categories</option>
         </select>
@@ -344,10 +334,8 @@
           <thead>
             <tr>
               <th class="sortable" onclick="Expenses._setSort('date')"><span id="sort-date">Date</span></th>
-              <th class="sortable" onclick="Expenses._setSort('expense_type')"><span id="sort-expense_type">Type</span></th>
               <th class="sortable" onclick="Expenses._setSort('vendor')"><span id="sort-vendor">Vendor</span></th>
               <th>Description</th>
-              <th class="sortable" onclick="Expenses._setSort('car_name')"><span id="sort-car_name">Car</span></th>
               <th class="sortable" onclick="Expenses._setSort('category')"><span id="sort-category">Category</span></th>
               <th class="sortable" onclick="Expenses._setSort('amount')"><span id="sort-amount">Amount</span></th>
               <th>Receipt</th>

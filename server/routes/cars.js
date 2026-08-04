@@ -29,6 +29,11 @@ router.put('/:id', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
+  const car = db.prepare('SELECT * FROM cars WHERE id = ?').get(req.params.id);
+  if (car) {
+    db.prepare('UPDATE expenses SET car_label = ? WHERE car_id = ?')
+      .run(`${car.make} ${car.model} ${car.year}`.trim(), req.params.id);
+  }
   db.prepare('DELETE FROM cars WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
