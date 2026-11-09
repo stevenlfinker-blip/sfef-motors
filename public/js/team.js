@@ -8,6 +8,7 @@ const Team = (() => {
   async function load() {
     const admin = !!App.me?.isAdmin;
     document.getElementById('team-add-btn').style.display = admin ? '' : 'none';
+    document.getElementById('team-test-email-btn').style.display = admin ? '' : 'none';
     document.getElementById('team-settings-btn').style.display = App.me?.id ? '' : 'none';
     try {
       _users = await API.get('/api/users');
@@ -106,5 +107,27 @@ const Team = (() => {
       });
   }
 
-  return { load, openAdd, openEdit, del, openSettings };
+  function openTestEmail() {
+    Modal.show('Send Test Email', `
+      <div class="form-row"><label>Send to</label>
+        <input type="email" id="t-to" value="${escHtml(App.me?.email || '')}" placeholder="you@example.com"></div>
+      <div id="t-result" style="font-size:13px;line-height:1.5"></div>`,
+      async () => {
+        const to = document.getElementById('t-to').value.trim();
+        const out = document.getElementById('t-result');
+        const btn = document.getElementById('modal-submit');
+        btn.disabled = true;
+        out.innerHTML = '<span style="color:var(--text-muted)">Sending… (up to 15 seconds)</span>';
+        try {
+          const r = await API.post('/api/users/test-email', { to });
+          out.innerHTML = r.ok
+            ? `<span style="color:var(--green)">✓ Sent from ${escHtml(r.from)}. Check ${escHtml(to)} (and its Spam folder).</span>`
+            : `<div style="color:var(--red)">✕ Failed: ${escHtml(r.error)}</div>${r.hint ? `<div style="margin-top:6px">${escHtml(r.hint)}</div>` : ''}`;
+        } catch (e) {
+          out.innerHTML = `<span style="color:var(--red)">✕ ${escHtml(_err(e, 'Request failed'))}</span>`;
+        } finally { btn.disabled = false; }
+      }, { submitLabel: 'Send' });
+  }
+
+  return { load, openAdd, openEdit, del, openSettings, openTestEmail };
 })();

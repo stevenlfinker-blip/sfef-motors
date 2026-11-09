@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { hashPassword, verifyPassword, handleOf } = require('../auth');
+const { testEmail } = require('../mailer');
 
 const PUBLIC = 'id, name, is_admin, notify_email';
 const FULL = 'id, name, email, is_admin, notify_email, created_at';
@@ -52,6 +53,12 @@ router.put('/me', (req, res) => {
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(password), req.user.id);
   }
   res.json({ success: true });
+});
+
+router.post('/test-email', requireAdmin, async (req, res) => {
+  const to = String(req.body.to || '').trim();
+  if (!/^\S+@\S+\.\S+$/.test(to)) return res.status(400).json({ error: 'Enter a valid email address' });
+  res.json(await testEmail(to));
 });
 
 router.post('/', requireAdmin, (req, res) => {
