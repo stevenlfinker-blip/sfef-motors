@@ -5,7 +5,7 @@ const fs = require('fs');
 const router = express.Router();
 const db = require('../db');
 const {
-  MESSAGE_SELECT, postMessage, withFiles, notifyForMessage,
+  MESSAGE_SELECT, postMessage, withFiles, notifyForMessage, purgeMessages,
   MAX_LEN, MAX_FILE_BYTES, MAX_FILES, CHAT_DIR, ALLOWED_EXT,
 } = require('../chat');
 
@@ -47,9 +47,14 @@ function requireMember(req, res, next) {
 
 // Conversation filter. peer null = the team room (never includes private
 // messages); otherwise only the two-person thread between me and peer.
+// In a private chat, also hides what this user has cleared.
+const PAIR_SQL = '((m.user_id = ? AND m.recipient_id = ?) OR (m.user_id = ? AND m.recipient_id = ?))';
+function clearedId(me, peer) {
+  return db.prepare('SELECT cleared_id FROM chat_reads WHERE user_id = ? AND peer_id = ?').get(me, peer)?.cleared_id || 0;
+}
 function convoWhere(me, peer) {
   return peer
-    ? { sql: '((m.user_id = ? AND m.recipient_id = ?) OR (m.user_id = ? AND m.recipient_id = ?))', args: [me, peer, peer, me] }
+    ? { sql: `${PAIR_SQL} AND m.id > ?`, args: [me, peer, peer, me, clearedId(me, peer)] }
     : { sql: 'm.recipient_id IS NULL', args: [] };
 }
 
@@ -107,6 +112,33 @@ router.post('/read', requireMember, (req, res) => {
      ON CONFLICT(user_id, peer_id) DO UPDATE SET last_read_id = excluded.last_read_id`
   ).run(req.user.id, peer || 0, maxId);
   res.json({ success: true });
+});
+
+// Team room (no `with`): admins only, deletes it for everyone.
+// Private chat: hides the history for me only; once both people have
+// cleared, the shared older messages are deleted for good.
+router.post('/clear', (req, res) => {
+  const { peer, bad } = parsePeer(req.body.with, req, res);
+  if (bad) return;
+
+  if (!peer) {
+    if (!req.user.isAdmin) return res.status(403).json({ error: 'Only admins can clear the team chat' });
+    const removed = purgeMessages('m.recipient_id IS NULL');
+    postMessage({ userId: req.user.id, kind: 'cleared', body: `${req.user.name} cleared the team chat` });
+    return res.json({ success: true, removed });
+  }
+
+  if (!req.user.id) return res.status(403).json({ error: 'Sign in with your own account to use private chats.' });
+  const me = req.user.id;
+  const { maxId } = db.prepare(`SELECT COALESCE(MAX(m.id), 0) AS maxId FROM messages m WHERE ${PAIR_SQL}`).get(me, peer, peer, me);
+  db.prepare(
+    `INSERT INTO chat_reads (user_id, peer_id, last_read_id, cleared_id) VALUES (?, ?, ?, ?)
+     ON CONFLICT(user_id, peer_id) DO UPDATE SET cleared_id = excluded.cleared_id,
+       last_read_id = MAX(last_read_id, excluded.last_read_id)`
+  ).run(me, peer, maxId, maxId);
+  const both = Math.min(maxId, clearedId(peer, me));
+  const removed = both ? purgeMessages(`${PAIR_SQL} AND m.id <= ?`, [me, peer, peer, me, both]) : 0;
+  res.json({ success: true, removed });
 });
 
 // Authenticated download by message id (no client-supplied paths).

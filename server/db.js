@@ -196,6 +196,9 @@ db.exec(`
     PRIMARY KEY (user_id, peer_id)
   );
 `);
+// cleared_id: in a private chat, messages up to this id are hidden for this
+// user ("clear chat" is per person there).
+try { db.exec("ALTER TABLE chat_reads ADD COLUMN cleared_id INTEGER DEFAULT 0"); } catch (e) { /* already exists */ }
 // A message can carry several attachments. file_path is the stored filename
 // inside data/uploads/chat/ (never a client-supplied path).
 db.exec(`

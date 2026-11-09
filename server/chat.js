@@ -49,6 +49,20 @@ function postMessage({ userId = null, recipientId = null, body, kind = 'chat', w
   return withFiles([db.prepare(MESSAGE_SELECT + 'WHERE m.id = ?').get(id)])[0];
 }
 
+// Permanently deletes matching messages and their files on disk.
+// where: SQL condition on messages aliased as m.
+function purgeMessages(where, args = []) {
+  const ids = db.prepare(`SELECT m.id FROM messages m WHERE ${where}`).all(...args).map(r => r.id);
+  if (!ids.length) return 0;
+  const marks = ids.map(() => '?').join(',');
+  for (const f of db.prepare(`SELECT file_path FROM message_files WHERE message_id IN (${marks})`).all(...ids)) {
+    fs.unlink(path.join(CHAT_DIR, path.basename(f.file_path)), () => {});
+  }
+  db.prepare(`DELETE FROM message_files WHERE message_id IN (${marks})`).run(...ids);
+  db.prepare(`DELETE FROM messages WHERE id IN (${marks})`).run(...ids);
+  return ids.length;
+}
+
 // Who gets emailed for a new chat message — shared by the web UI and replies
 // that arrive by email. sender: users row. Replies to these emails come back
 // into the same conversation.
@@ -77,6 +91,6 @@ function notifyForMessage({ sender, recipientId, body, files = [], isAlert = fal
 }
 
 module.exports = {
-  MESSAGE_SELECT, postMessage, withFiles, notifyForMessage,
+  MESSAGE_SELECT, postMessage, withFiles, notifyForMessage, purgeMessages,
   MAX_LEN, MAX_FILE_BYTES, MAX_FILES, CHAT_DIR, ALLOWED_EXT,
 };

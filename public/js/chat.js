@@ -81,7 +81,7 @@ const Chat = (() => {
   }
 
   function _messageHtml(m) {
-    if (m.kind === 'system') {
+    if (m.kind === 'system' || m.kind === 'cleared') {
       return `<div class="chat-msg chat-system">${escHtml(m.body)}<span class="chat-time">${_time(m.created_at)}</span></div>`;
     }
     const mine = App.me && m.user_id === App.me.id;
@@ -178,6 +178,9 @@ const Chat = (() => {
 
   function _renderCompose() {
     document.getElementById('chat-compose').style.display = _canChat() ? '' : 'none';
+    const clearBtn = document.getElementById('chat-clear-btn');
+    clearBtn.classList.toggle('hidden', _peer === null ? !App.me?.isAdmin : !_canChat());
+    clearBtn.textContent = _peer === null ? '🗑 Clear Team Chat' : '🗑 Clear Chat';
     document.getElementById('chat-input').placeholder = _peer === null
       ? 'Message the team… use @name to notify someone'
       : `Private message to ${_peerName()}… (they'll get an email)`;
@@ -265,6 +268,9 @@ const Chat = (() => {
       if (App.currentSection === 'chat') {
         const fresh = await API.get('/api/chat?' + _q('after=' + _lastId));
         if (asked === _peer && fresh.length) {
+          // someone cleared the team chat: drop everything before that note
+          const cut = fresh.map(m => m.kind).lastIndexOf('cleared');
+          if (cut >= 0) { _messages = []; fresh.splice(0, cut); }
           _messages.push(...fresh);
           _lastId = fresh[fresh.length - 1].id;
           _render();
@@ -279,6 +285,18 @@ const Chat = (() => {
     if (_timer) return;
     _loadMembers().then(() => { _renderTabs(); _poll(); });
     _timer = setInterval(_poll, 5000);
+  }
+
+  async function clear() {
+    const ok = confirm(_peer === null
+      ? 'Clear the team chat for EVERYONE? All team messages and their files will be permanently deleted.'
+      : `Clear your chat with ${_peerName()}? It disappears for you only — ${_peerName()} keeps their copy.`);
+    if (!ok) return;
+    try {
+      await API.post('/api/chat/clear', { with: _peer });
+      Toast.show('Chat cleared');
+      _loadConversation();
+    } catch (e) { Toast.show(_err(e, 'Failed to clear chat'), 'error'); }
   }
 
   async function send() {
@@ -340,5 +358,5 @@ const Chat = (() => {
     });
   });
 
-  return { load, send, startPolling, removeFile, open, pickMention };
+  return { load, send, startPolling, removeFile, open, pickMention, clear };
 })();
