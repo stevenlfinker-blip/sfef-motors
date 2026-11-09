@@ -1,11 +1,13 @@
 const Maintenance = (() => {
   let _items = [];
   let _cars = [];
+  let _users = [];
 
   async function load() {
     try {
-      [_items, _cars] = await Promise.all([API.get('/api/maintenance'), API.get('/api/cars')]);
+      [_items, _cars, _users] = await Promise.all([API.get('/api/maintenance'), API.get('/api/cars'), API.get('/api/users')]);
       _populateCarFilter();
+      _populateAssigneeFilter();
       render();
     } catch (e) { Toast.show('Failed to load maintenance', 'error'); }
   }
@@ -15,6 +17,16 @@ const Maintenance = (() => {
     const cur = sel.value;
     sel.innerHTML = '<option value="">All Cars</option>' +
       _cars.map(c => `<option value="${c.id}" ${cur == c.id ? 'selected':''}>${carLabel(c)}</option>`).join('');
+  }
+
+  function _populateAssigneeFilter() {
+    const sel = document.getElementById('maint-filter-assignee');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Everyone</option>' +
+      (App.me?.id ? '<option value="me">Assigned to me</option>' : '') +
+      '<option value="none">Unassigned</option>' +
+      _users.map(u => `<option value="${u.id}">${escHtml(u.name)}</option>`).join('');
+    sel.value = [...sel.options].some(o => o.value === cur) ? cur : '';
   }
 
   function _status(m) {
@@ -29,13 +41,18 @@ const Maintenance = (() => {
   function render() {
     const carFilter = document.getElementById('maint-filter-car').value;
     const statusFilter = document.getElementById('maint-filter-status').value;
+    const who = document.getElementById('maint-filter-assignee').value;
     let items = _items;
+    if (who === 'me') items = items.filter(m => m.assigned_to === App.me?.id);
+    else if (who === 'none') items = items.filter(m => !m.assigned_to);
+    else if (who) items = items.filter(m => String(m.assigned_to) === who);
     if (carFilter) items = items.filter(m => String(m.car_id) === carFilter);
-    if (statusFilter) items = items.filter(m => _status(m) === statusFilter);
+    if (statusFilter === 'in-progress') items = items.filter(m => !m.completed && m.status === 'in_progress');
+    else if (statusFilter) items = items.filter(m => _status(m) === statusFilter);
 
     const tbody = document.getElementById('maintenance-tbody');
     if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">
         <div class="empty-state-icon">⚙</div>
         <div class="empty-state-title">No maintenance tasks</div>
         <div class="empty-state-sub">Add a maintenance schedule for your vehicles</div>
@@ -47,10 +64,11 @@ const Maintenance = (() => {
       return `<tr>
         <td><strong>${escHtml(m.title)}</strong>${m.description ? `<br><span style="color:var(--text-muted);font-size:11px">${escHtml(m.description)}</span>` : ''}</td>
         <td>${escHtml(m.car_name || '—')}</td>
+        <td>${escHtml(m.assigned_name || '—')}</td>
         <td>${fmtDate(m.due_date)}</td>
         <td>${escHtml(m.due_mileage) || '—'}</td>
         <td>${m.cost ? fmt$(m.cost) : '—'}</td>
-        <td>${App.maintBadge(st)}</td>
+        <td>${App.maintBadge(st)}${!m.completed && m.status === 'in_progress' ? ' <span style="color:var(--blue);font-weight:600;font-size:11px">· In Progress</span>' : ''}</td>
         <td><div class="td-actions">
           ${!m.completed ? `<button class="btn btn-ghost btn-sm" onclick="Maintenance.markDone(${m.id})" title="Mark Complete">✓</button>` : ''}
           <button class="btn btn-ghost btn-sm" onclick="Maintenance.openEdit(${m.id})">Edit</button>
@@ -80,6 +98,19 @@ const Maintenance = (() => {
       </div>
       <div class="form-row-2">
         <div class="form-row">
+          <label>Assigned To</label>
+          <select id="f-assignee"><option value="">— Unassigned —</option>${_users.map(u => `<option value="${u.id}" ${m.assigned_to == u.id ? 'selected' : ''}>${escHtml(u.name)}</option>`).join('')}</select>
+        </div>
+        <div class="form-row">
+          <label>Progress</label>
+          <select id="f-status">
+            <option value="open" ${m.status !== 'in_progress' ? 'selected' : ''}>Open</option>
+            <option value="in_progress" ${m.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row">
           <label>Due Date</label>
           <input type="date" id="f-due-date" value="${m.due_date || ''}">
         </div>
@@ -104,6 +135,8 @@ const Maintenance = (() => {
     return {
       car_id: document.getElementById('f-car').value || null,
       title: document.getElementById('f-title').value.trim(),
+      assigned_to: document.getElementById('f-assignee').value || null,
+      status: document.getElementById('f-status').value,
       description: document.getElementById('f-desc').value.trim(),
       due_date: document.getElementById('f-due-date').value || null,
       due_mileage: document.getElementById('f-due-mileage').value.trim(),

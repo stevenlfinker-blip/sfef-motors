@@ -82,6 +82,17 @@
         <span class="nav-label">Events</span>
         <span class="nav-badge" id="badge-events">0</span>
       </div>
+
+      <div class="nav-section-label">Team</div>
+      <div class="nav-item" data-section="chat">
+        <span class="nav-icon">✉</span>
+        <span class="nav-label">Team Chat</span>
+        <span class="nav-badge hidden" id="badge-chat">0</span>
+      </div>
+      <div class="nav-item" data-section="team">
+        <span class="nav-icon">☺</span>
+        <span class="nav-label">Members</span>
+      </div>
     </nav>
 
     <div class="sidebar-footer">
@@ -145,8 +156,12 @@
         <select class="filter-select" id="maint-filter-car" onchange="Maintenance.render()">
           <option value="">All Cars</option>
         </select>
+        <select class="filter-select" id="maint-filter-assignee" onchange="Maintenance.render()">
+          <option value="">Everyone</option>
+        </select>
         <select class="filter-select" id="maint-filter-status" onchange="Maintenance.render()">
           <option value="">All Status</option>
+          <option value="in-progress">In Progress</option>
           <option value="pending">Pending</option>
           <option value="overdue">Overdue</option>
           <option value="due-soon">Due Soon</option>
@@ -159,6 +174,7 @@
             <tr>
               <th>Task</th>
               <th>Car</th>
+              <th>Assigned</th>
               <th>Due Date</th>
               <th>Due Mileage</th>
               <th>Cost</th>
@@ -371,6 +387,45 @@
       <div id="events-list"></div>
     </section>
 
+    <!-- Team Chat -->
+    <section id="section-chat" class="section">
+      <div class="section-header">
+        <div class="section-title">Team <span>/ Chat</span></div>
+      </div>
+      <div class="card chat-card">
+        <div id="chat-tabs" class="chat-tabs"></div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div id="chat-compose" class="chat-compose">
+          <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Message the team… use @name to notify someone"></textarea>
+          <div id="chat-files" class="chat-files hidden"></div>
+          <input type="file" id="chat-file" class="hidden" multiple
+                 accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.mp4,.mov">
+          <div class="chat-compose-row">
+            <button class="btn btn-secondary" type="button" onclick="document.getElementById('chat-file').click()" title="Attach photos or files">📎 Attach</button>
+            <label class="checkbox-row"><input type="checkbox" id="chat-alert"><span id="chat-alert-label">Alert everyone (sends email)</span></label>
+            <button class="btn btn-primary" id="chat-send" onclick="Chat.send()">Send</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Team Members -->
+    <section id="section-team" class="section">
+      <div class="section-header">
+        <div class="section-title">Team <span>/ Members</span></div>
+        <div class="section-actions">
+          <button class="btn btn-secondary" id="team-settings-btn" onclick="Team.openSettings()">My Settings</button>
+          <button class="btn btn-primary" id="team-add-btn" onclick="Team.openAdd()">+ Add Member</button>
+        </div>
+      </div>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Email Alerts</th><th></th></tr></thead>
+          <tbody id="team-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -466,6 +521,8 @@
 <script src="/js/market.js"></script>
 <script src="/js/expenses.js"></script>
 <script src="/js/events.js"></script>
+<script src="/js/chat.js"></script>
+<script src="/js/team.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});

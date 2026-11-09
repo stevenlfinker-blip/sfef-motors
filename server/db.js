@@ -159,6 +159,59 @@ db.exec(`
   );
 `);
 
+// ── Team: users, chat, work-order assignment ─────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    is_admin INTEGER DEFAULT 0,
+    notify_email INTEGER DEFAULT 1,
+    last_read_id INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    body TEXT NOT NULL,
+    kind TEXT DEFAULT 'chat',
+    work_order_id INTEGER,
+    created_at TEXT NOT NULL
+  );
+`);
+// assigned_to has no FK on purpose: backup imports wipe/restore maintenance
+// independently of users. "Done" is still the existing completed flag, so
+// status only ever holds 'open' or 'in_progress'.
+// recipient_id NULL = the team room; otherwise a private message to that user.
+try { db.exec("ALTER TABLE messages ADD COLUMN recipient_id INTEGER"); } catch (e) { /* already exists */ }
+// Per-conversation read marker. peer_id 0 = the team room, otherwise the other
+// person in a private chat.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chat_reads (
+    user_id INTEGER NOT NULL,
+    peer_id INTEGER NOT NULL,
+    last_read_id INTEGER DEFAULT 0,
+    PRIMARY KEY (user_id, peer_id)
+  );
+`);
+// A message can carry several attachments. file_path is the stored filename
+// inside data/uploads/chat/ (never a client-supplied path).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS message_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL,
+    file_path TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    file_type TEXT DEFAULT '',
+    file_size INTEGER DEFAULT 0,
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+  );
+`);
+try { db.exec("ALTER TABLE maintenance ADD COLUMN assigned_to INTEGER"); } catch (e) { /* already exists */ }
+try { db.exec("ALTER TABLE maintenance ADD COLUMN status TEXT DEFAULT 'open'"); } catch (e) { /* already exists */ }
+
 // ── Seed estimated market history (runs once if missing) ──────────────────────
 (function seedMarketHistory() {
   const existing = db.prepare(

@@ -19,9 +19,9 @@ router.post('/import', (req, res) => {
       insertCar.run(r.id, r.year, r.make, r.model, r.color||'', r.mileage||'', r.status||'Active', r.notes||'', r.vin||'', r.ownership||'', r.registration||'', r.insurance||'', r.value||0, r.category||'Daily');
     }
 
-    const insertMaint = db.prepare('INSERT INTO maintenance (id, car_id, title, description, due_date, due_mileage, completed, completed_date, cost, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertMaint = db.prepare('INSERT INTO maintenance (id, car_id, title, description, due_date, due_mileage, completed, completed_date, cost, notes, assigned_to, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     for (const r of data.maintenance || []) {
-      insertMaint.run(r.id, r.car_id||null, r.title, r.description||'', r.due_date||null, r.due_mileage||'', r.completed||0, r.completed_date||'', r.cost||0, r.notes||'');
+      insertMaint.run(r.id, r.car_id||null, r.title, r.description||'', r.due_date||null, r.due_mileage||'', r.completed||0, r.completed_date||'', r.cost||0, r.notes||'', r.assigned_to||null, r.status||'open');
     }
 
     const insertPart = db.prepare('INSERT INTO parts (id, car_id, name, part_number, quantity, location, cost_each, supplier, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');

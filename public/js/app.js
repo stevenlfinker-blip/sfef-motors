@@ -51,12 +51,15 @@ const SECTION_TITLES = {
   other:       'Inventory · Other',
   expenses:    'Finances · Expenses',
   events:      'Schedule · Events',
+  chat:        'Team · Chat',
+  team:        'Team · Members',
 };
 
 const App = {
   currentSection: 'dashboard',
+  me: null, // { id, name, isAdmin, email, notify_email } — id is null for shared-password sessions
 
-  init() {
+  async init() {
     // Nav clicks
     document.querySelectorAll('.nav-item[data-section]').forEach(el => {
       el.addEventListener('click', () => App.navigate(el.dataset.section));
@@ -65,6 +68,10 @@ const App = {
     // Clock
     App.updateClock();
     setInterval(App.updateClock, 1000);
+
+    // Who's signed in — needed before Maintenance/Team/Chat render
+    try { App.me = await API.get('/api/users/me'); } catch (_) {}
+    Chat.startPolling();
 
     // Load initial data for badges
     App.refreshBadges();
@@ -119,6 +126,8 @@ const App = {
       case 'market':      Market.load(); break;
       case 'expenses':    Expenses.load(); break;
       case 'events':      Events.load(); break;
+      case 'chat':        Chat.load(); break;
+      case 'team':        Team.load(); break;
     }
   },
 

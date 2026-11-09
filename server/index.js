@@ -7,6 +7,8 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const db = require('./db');
+const { verifyPassword, DUMMY_HASH } = require('./auth');
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -90,19 +92,34 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
 });
 
+// Team members sign in with email + their own password. Leaving email blank
+// and entering the shared APP_PASSWORD gives an admin session with no user
+// identity (enough to set up the team, but it can't chat or be assigned work).
 app.post('/login', loginLimiter, (req, res) => {
-  if (req.body.password === APP_PASSWORD) {
-    // Regenerate session ID on login — prevents session fixation attacks
-    req.session.regenerate(err => {
-      if (err) return res.redirect('/login?error=1');
-      req.session.authenticated = true;
-      req.session.save(() => res.redirect('/'));
-    });
-  } else {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '');
+  let sessionUser = null;
+
+  if (email) {
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    const ok = verifyPassword(password, user ? user.password_hash : DUMMY_HASH);
+    if (user && ok) sessionUser = { id: user.id, name: user.name, isAdmin: !!user.is_admin };
+  } else if (password === APP_PASSWORD) {
+    sessionUser = { id: null, name: 'Admin', isAdmin: true };
+  }
+
+  if (!sessionUser) {
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
     console.warn(`[SECURITY] Failed login from ${ip} at ${new Date().toISOString()}`);
-    res.redirect('/login?error=1');
+    return res.redirect('/login?error=1');
   }
+  // Regenerate session ID on login — prevents session fixation attacks
+  req.session.regenerate(err => {
+    if (err) return res.redirect('/login?error=1');
+    req.session.authenticated = true;
+    req.session.user = sessionUser;
+    req.session.save(() => res.redirect('/'));
+  });
 });
 
 app.get('/logout', (req, res) => {
@@ -110,8 +127,25 @@ app.get('/logout', (req, res) => {
 });
 
 // ── Auth guard ────────────────────────────────────
+// req.user is re-read from the DB each request so deleting a member or
+// removing their admin access takes effect immediately, not at session expiry.
 app.use((req, res, next) => {
-  if (req.session.authenticated) return next();
+  if (req.session.authenticated) {
+    const su = req.session.user || { id: null, name: 'Admin', isAdmin: true }; // pre-accounts sessions
+    if (su.id) {
+      const row = db.prepare('SELECT id, name, is_admin FROM users WHERE id = ?').get(su.id);
+      if (!row) {
+        return req.session.destroy(() => {
+          if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Unauthorized' });
+          res.redirect('/login');
+        });
+      }
+      req.user = { id: row.id, name: row.name, isAdmin: !!row.is_admin };
+    } else {
+      req.user = su;
+    }
+    return next();
+  }
   if (req.path.startsWith('/api/') || req.headers.accept?.includes('application/json')) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -135,6 +169,8 @@ app.use('/api/market', require('./routes/market'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/watchlist', require('./routes/watchlist'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/chat', require('./routes/chat'));
 app.use('/api', require('./routes/import'));
 
 // ── Start ─────────────────────────────────────────
