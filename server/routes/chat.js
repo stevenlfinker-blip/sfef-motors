@@ -4,20 +4,13 @@ const path = require('path');
 const fs = require('fs');
 const router = express.Router();
 const db = require('../db');
-const { MESSAGE_SELECT, postMessage, withFiles } = require('../chat');
-const { notifyUsers } = require('../mailer');
-const { handleOf } = require('../auth');
+const {
+  MESSAGE_SELECT, postMessage, withFiles, notifyForMessage,
+  MAX_LEN, MAX_FILE_BYTES, MAX_FILES, CHAT_DIR, ALLOWED_EXT,
+} = require('../chat');
 
-const MAX_LEN = 2000;
-const MAX_FILE_BYTES = 25 * 1024 * 1024;
-const MAX_FILES = 10;
-const CHAT_DIR = path.join(__dirname, '..', '..', 'data', 'uploads', 'chat');
-fs.mkdirSync(CHAT_DIR, { recursive: true });
-
-// SVG/HTML are deliberately absent: served from our own origin they could run
-// script. Only raster images are ever displayed inline; the rest download.
+// Only raster images are ever displayed inline; everything else downloads.
 const INLINE_IMAGE = /\.(jpe?g|png|gif|webp)$/i;
-const ALLOWED_EXT = /\.(jpe?g|png|gif|webp|heic|pdf|docx?|xlsx?|pptx?|txt|csv|zip|mp4|mov)$/i;
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -152,26 +145,8 @@ router.post('/', requireMember, runUpload, (req, res) => {
     path: f.filename, name: displayName(f.originalname), type: f.mimetype, size: f.size,
   }));
   const message = postMessage({ userId: req.user.id, recipientId: recipient, body, kind: isAlert ? 'alert' : 'chat', files });
-  const emailBody = body + (files.length ? `${body ? '\n\n' : ''}[Attachments: ${files.map(f => f.name).join(', ')}]` : '');
-
-  if (recipient) {
-    // Private messages always email the recipient (unless they've turned
-    // email alerts off); the alert flag just marks it urgent.
-    const to = db.prepare('SELECT * FROM users WHERE id = ?').get(recipient);
-    notifyUsers([to],
-      `${isAlert ? '[URGENT] ' : ''}Private message from ${req.user.name}`,
-      `${req.user.name} sent you a private message:\n\n${emailBody}`);
-    return res.status(201).json(message);
-  }
-
-  const others = db.prepare('SELECT * FROM users WHERE id != ?').all(req.user.id);
-  if (isAlert) {
-    notifyUsers(others, `[ALERT] ${req.user.name}`, `${req.user.name} sent a team alert:\n\n${emailBody}`);
-  } else {
-    const handles = new Set([...body.matchAll(/@([a-z0-9]+)/gi)].map(m => m[1].toLowerCase()));
-    const mentioned = others.filter(u => handles.has(handleOf(u.name)));
-    notifyUsers(mentioned, `${req.user.name} mentioned you in SFEF chat`, `${req.user.name} wrote:\n\n${emailBody}`);
-  }
+  const sender = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  notifyForMessage({ sender, recipientId: recipient, body, files, isAlert });
   res.status(201).json(message);
 });
 

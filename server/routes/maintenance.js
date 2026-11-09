@@ -38,7 +38,7 @@ function announceAssignment(actor, order) {
       order.car_name ? `Car: ${order.car_name}` : '',
       order.due_date ? `Due: ${order.due_date}` : '',
       order.description ? `\n${order.description}` : '',
-    ].filter(l => l !== '').join('\n'));
+    ].filter(l => l !== '').join('\n'), actor.id || 0);
   }
 }
 

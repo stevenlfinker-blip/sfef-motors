@@ -174,6 +174,8 @@ app.use('/api/chat', require('./routes/chat'));
 app.use('/api', require('./routes/import'));
 
 // ── Start ─────────────────────────────────────────
+require('./inbound').start();
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  SFEF MOTORS`);
   console.log(`  -----------`);
