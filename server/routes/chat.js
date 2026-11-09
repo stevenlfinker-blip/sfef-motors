@@ -95,7 +95,7 @@ router.get('/unread', (req, res) => {
   const rows = db.prepare(`
     SELECT m.user_id AS peer, COUNT(*) AS n FROM messages m
     LEFT JOIN chat_reads r ON r.user_id = ? AND r.peer_id = m.user_id
-    WHERE m.recipient_id = ? AND m.id > COALESCE(r.last_read_id, 0)
+    WHERE m.recipient_id = ? AND m.id > MAX(COALESCE(r.last_read_id, 0), COALESCE(r.cleared_id, 0))
     GROUP BY m.user_id`).all(me, me);
   let total = team;
   for (const r of rows) { dms[r.peer] = r.n; total += r.n; }
@@ -105,12 +105,17 @@ router.get('/unread', (req, res) => {
 router.post('/read', requireMember, (req, res) => {
   const { peer, bad } = parsePeer(req.body.with, req, res);
   if (bad) return;
-  const w = convoWhere(req.user.id, peer);
-  const { maxId } = db.prepare(`SELECT COALESCE(MAX(m.id), 0) AS maxId FROM messages m WHERE ${w.sql}`).get(...w.args);
+  // Max over the whole conversation (not just what's visible after a clear),
+  // and never move the marker backwards — an emptied chat must not reset it
+  // to 0 and resurrect old messages as unread.
+  const me = req.user.id;
+  const { maxId } = peer
+    ? db.prepare(`SELECT COALESCE(MAX(m.id), 0) AS maxId FROM messages m WHERE ${PAIR_SQL}`).get(me, peer, peer, me)
+    : db.prepare('SELECT COALESCE(MAX(m.id), 0) AS maxId FROM messages m WHERE m.recipient_id IS NULL').get();
   db.prepare(
     `INSERT INTO chat_reads (user_id, peer_id, last_read_id) VALUES (?, ?, ?)
-     ON CONFLICT(user_id, peer_id) DO UPDATE SET last_read_id = excluded.last_read_id`
-  ).run(req.user.id, peer || 0, maxId);
+     ON CONFLICT(user_id, peer_id) DO UPDATE SET last_read_id = MAX(last_read_id, excluded.last_read_id)`
+  ).run(me, peer || 0, maxId);
   res.json({ success: true });
 });
 

@@ -215,4 +215,25 @@ const App = {
   },
 };
 
+// Phones: size the app to the part of the screen actually visible. iOS
+// Safari's 100vh includes the area behind its toolbars, and on-screen
+// keyboards cover the page instead of shrinking it — so the chat box ended up
+// hidden. Tracking visualViewport fixes both, and .kb-open lets CSS hide the
+// bottom tab bar while typing. Touch devices only, and not while pinch-zoomed.
+(function fitToVisibleScreen() {
+  const vv = window.visualViewport;
+  if (!vv || !window.matchMedia('(pointer: coarse)').matches) return;
+  const root = document.documentElement;
+  const update = () => {
+    if (vv.scale > 1.01) return;
+    root.style.setProperty('--app-h', vv.height + 'px');
+    root.classList.add('has-app-h');
+    root.classList.toggle('kb-open', window.innerHeight - vv.height > 150);
+    if (window.scrollY) window.scrollTo(0, 0); // iOS pans the page when focusing an input
+  };
+  vv.addEventListener('resize', update);
+  vv.addEventListener('scroll', update);
+  update();
+})();
+
 document.addEventListener('DOMContentLoaded', () => App.init());

@@ -28,10 +28,10 @@ const Team = (() => {
       return;
     }
     tbody.innerHTML = _users.map(u => `<tr>
-      <td><strong>${escHtml(u.name)}</strong>${u.id === App.me?.id ? ' <span style="color:var(--text-muted);font-size:11px">(you)</span>' : ''}</td>
-      <td>${escHtml(u.email || '—')}</td>
-      <td>${u.is_admin ? 'Admin' : 'Member'}</td>
-      <td>${u.notify_email ? 'On' : 'Off'}</td>
+      <td class="td-primary"><strong>${escHtml(u.name)}</strong>${u.id === App.me?.id ? ' <span style="color:var(--text-muted);font-size:11px">(you)</span>' : ''}</td>
+      <td data-label="Email">${escHtml(u.email || '—')}</td>
+      <td data-label="Role">${u.is_admin ? 'Admin' : 'Member'}</td>
+      <td data-label="Email alerts">${u.notify_email ? 'On' : 'Off'}</td>
       <td><div class="td-actions">${admin ? `
         <button class="btn btn-ghost btn-sm" onclick="Team.openEdit(${u.id})">Edit</button>
         ${u.id !== App.me?.id ? `<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="Team.del(${u.id})">✕</button>` : ''}` : ''}

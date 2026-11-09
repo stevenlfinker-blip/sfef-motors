@@ -62,13 +62,13 @@ const Maintenance = (() => {
     tbody.innerHTML = items.map(m => {
       const st = _status(m);
       return `<tr>
-        <td><strong>${escHtml(m.title)}</strong>${m.description ? `<br><span style="color:var(--text-muted);font-size:11px">${escHtml(m.description)}</span>` : ''}</td>
-        <td>${escHtml(m.car_name || '—')}</td>
-        <td>${escHtml(m.assigned_name || '—')}</td>
-        <td>${fmtDate(m.due_date)}</td>
-        <td>${escHtml(m.due_mileage) || '—'}</td>
-        <td>${m.cost ? fmt$(m.cost) : '—'}</td>
-        <td>${App.maintBadge(st)}${!m.completed && m.status === 'in_progress' ? ' <span style="color:var(--blue);font-weight:600;font-size:11px">· In Progress</span>' : ''}</td>
+        <td class="td-primary"><strong>${escHtml(m.title)}</strong>${m.description ? `<br><span style="color:var(--text-muted);font-size:11px">${escHtml(m.description)}</span>` : ''}</td>
+        <td data-label="Car">${escHtml(m.car_name || '—')}</td>
+        <td data-label="Assigned">${escHtml(m.assigned_name || '—')}</td>
+        <td data-label="Due">${fmtDate(m.due_date)}</td>
+        <td data-label="Mileage">${escHtml(m.due_mileage) || '—'}</td>
+        <td data-label="Cost">${m.cost ? fmt$(m.cost) : '—'}</td>
+        <td data-label="Status">${App.maintBadge(st)}${!m.completed && m.status === 'in_progress' ? ' <span style="color:var(--blue);font-weight:600;font-size:11px">· In Progress</span>' : ''}</td>
         <td><div class="td-actions">
           ${!m.completed ? `<button class="btn btn-ghost btn-sm" onclick="Maintenance.markDone(${m.id})" title="Mark Complete">✓</button>` : ''}
           <button class="btn btn-ghost btn-sm" onclick="Maintenance.openEdit(${m.id})">Edit</button>

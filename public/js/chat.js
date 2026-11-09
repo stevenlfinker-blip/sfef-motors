@@ -7,6 +7,7 @@ const Chat = (() => {
   let _lastId = 0;
   let _timer = null;
   let _busy = false;
+  let _stick = true;           // keep the view pinned to the newest message
   let _files = [];
   const _drafts = {};         // unsent text per conversation, so switching tabs doesn't lose it
   const MAX_FILE = 25 * 1024 * 1024;
@@ -44,7 +45,7 @@ const Chat = (() => {
     const url = f => `/api/chat/file/${f.id}`;
     const images = m.files.filter(f => _isImage(f.name));
     const others = m.files.filter(f => !_isImage(f.name));
-    return (images.length ? `<div class="chat-imgs">${images.map(f =>
+    return (images.length ? `<div class="chat-imgs ${images.length > 1 ? 'multi' : ''}">${images.map(f =>
         `<a href="${url(f)}" target="_blank" rel="noopener"><img class="chat-img" src="${url(f)}" alt="${escHtml(f.name)}" loading="lazy"></a>`).join('')}</div>` : '') +
       others.map(f =>
         `<a class="chat-file" href="${url(f)}" download>📄 <span>${escHtml(f.name)}</span> <em>${_size(f.size || 0)}</em></a>`).join('');
@@ -78,6 +79,7 @@ const Chat = (() => {
     box.innerHTML = _files.map((f, i) =>
       `<div class="chat-file-chip"><span>📎 ${escHtml(f.name)} <em>${_size(f.size)}</em></span><button type="button" class="btn-icon" onclick="Chat.removeFile(${i})" aria-label="Remove ${escHtml(f.name)}">✕</button></div>`
     ).join('');
+    if (_stick) _scrollToEnd(); // the compose box just grew/shrank
   }
 
   function _messageHtml(m) {
@@ -92,13 +94,20 @@ const Chat = (() => {
     </div>`;
   }
 
+  function _scrollToEnd() {
+    const box = document.getElementById('chat-messages');
+    box.scrollTop = box.scrollHeight;
+  }
+
   function _render() {
     const box = document.getElementById('chat-messages');
-    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     box.innerHTML = _messages.length
       ? _messages.map(_messageHtml).join('')
       : `<div class="empty-state"><div class="empty-state-icon">✉</div><div class="empty-state-title">No messages yet</div><div class="empty-state-sub">${_peer === null ? 'Say hello to the team' : 'Start a private conversation with ' + escHtml(_peerName())}</div></div>`;
-    if (nearBottom) box.scrollTop = box.scrollHeight;
+    // Photos load after this render and grow the list; keep pinned to the
+    // bottom as each one arrives, unless the user has scrolled up to read.
+    box.querySelectorAll('img').forEach(img => img.addEventListener('load', () => { if (_stick) _scrollToEnd(); }));
+    if (_stick) _scrollToEnd();
   }
 
   function _renderTabs() {
@@ -108,6 +117,8 @@ const Chat = (() => {
     document.getElementById('chat-tabs').innerHTML =
       tab(null, '# Team', _unread.team) +
       (_canChat() ? _members.map(u => tab(u.id, escHtml(u.name), _unread.dms[u.id])).join('') : '');
+    // on a phone the tab strip scrolls sideways — keep the open one visible
+    document.querySelector('#chat-tabs .chat-tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
   // ── @mention autocomplete (team room only — private chats email anyway) ──
@@ -180,20 +191,22 @@ const Chat = (() => {
     document.getElementById('chat-compose').style.display = _canChat() ? '' : 'none';
     const clearBtn = document.getElementById('chat-clear-btn');
     clearBtn.classList.toggle('hidden', _peer === null ? !App.me?.isAdmin : !_canChat());
-    clearBtn.textContent = _peer === null ? '🗑 Clear Team Chat' : '🗑 Clear Chat';
+    clearBtn.title = _peer === null ? 'Clear team chat (everyone)' : 'Clear this chat (just for you)';
+    // kept short so it fits on one line on a phone
+    const first = _peerName().split(' ')[0];
     document.getElementById('chat-input').placeholder = _peer === null
-      ? 'Message the team… use @name to notify someone'
-      : `Private message to ${_peerName()}… (they'll get an email)`;
-    document.getElementById('chat-alert-label').textContent = _peer === null
-      ? 'Alert everyone (sends email)'
-      : 'Mark as urgent';
+      ? 'Message the team (@ to mention)'
+      : `Message ${first} · emails them`;
+    document.getElementById('chat-alert-label').textContent = _peer === null ? 'Alert all (email)' : 'Urgent';
   }
 
   function _applyUnread(u) {
     _unread = u;
-    const badge = document.getElementById('badge-chat');
-    badge.textContent = u.total > 99 ? '99+' : u.total;
-    badge.classList.toggle('hidden', !u.total);
+    for (const id of ['badge-chat', 'bnav-badge-chat']) {
+      const badge = document.getElementById(id);
+      badge.textContent = u.total > 99 ? '99+' : u.total;
+      badge.classList.toggle('hidden', !u.total);
+    }
     _renderTabs();
   }
 
@@ -234,9 +247,9 @@ const Chat = (() => {
       if (asked !== _peer) return; // switched tabs while loading
       _messages = msgs;
       _lastId = _messages.length ? _messages[_messages.length - 1].id : 0;
+      _stick = true;
       _render();
       const box = document.getElementById('chat-messages');
-      box.scrollTop = box.scrollHeight;
       if (!_canChat()) {
         box.insertAdjacentHTML('beforeend', '<div class="chat-msg chat-system">You\'re signed in with the shared password. Add yourself under Members and sign in with your own email to post and send private messages.</div>');
       }
@@ -326,7 +339,8 @@ const Chat = (() => {
       if (sentTo === _peer) {
         if (msg.id > _lastId) { _messages.push(msg); _lastId = msg.id; }
         _render();
-        document.getElementById('chat-messages').scrollTop = 1e9;
+        _stick = true;
+        _scrollToEnd();
         _markRead();
       }
     } catch (e) {
@@ -336,6 +350,10 @@ const Chat = (() => {
 
   document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('chat-input');
+    const box = document.getElementById('chat-messages');
+    box.addEventListener('scroll', () => {
+      _stick = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+    }, { passive: true });
     input.addEventListener('keydown', e => {
       if (_mentionKey(e)) { e.preventDefault(); return; }
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
