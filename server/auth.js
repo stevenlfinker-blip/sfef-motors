@@ -21,7 +21,7 @@ const DUMMY_HASH = hashPassword('not-a-real-password');
 
 // @mention handle = first word of the name, letters/digits only, lowercase.
 function handleOf(name) {
-  return String(name || '').trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+  return String(name || '').trim().split(/\s+/)[0].normalize('NFD').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 module.exports = { hashPassword, verifyPassword, DUMMY_HASH, handleOf };

@@ -110,6 +110,72 @@ const Chat = (() => {
       (_canChat() ? _members.map(u => tab(u.id, escHtml(u.name), _unread.dms[u.id])).join('') : '');
   }
 
+  // ── @mention autocomplete (team room only — private chats email anyway) ──
+  // Handle must match the server's handleOf(): first word, letters/digits, lowercase.
+  const _handleOf = name => String(name || '').trim().split(/\s+/)[0].normalize('NFD').toLowerCase().replace(/[^a-z0-9]/g, '');
+  let _mention = null; // { start, matches, sel } while the list is open
+
+  function _closeMentions() {
+    _mention = null;
+    document.getElementById('chat-mentions').classList.add('hidden');
+  }
+
+  function _updateMentions() {
+    const input = document.getElementById('chat-input');
+    const before = input.value.slice(0, input.selectionStart);
+    const m = _peer === null && before.match(/(^|\s)@([a-z0-9]*)$/i);
+    if (!m) return _closeMentions();
+    const q = m[2].toLowerCase();
+    const matches = _members
+      .filter(u => _handleOf(u.name).startsWith(q) || u.name.toLowerCase().includes(q))
+      .slice(0, 6);
+    _mention = { start: before.length - m[2].length - 1, matches, sel: 0 };
+    _renderMentions();
+  }
+
+  function _renderMentions() {
+    const box = document.getElementById('chat-mentions');
+    box.classList.remove('hidden');
+    if (!_members.length) {
+      box.innerHTML = '<div class="chat-mention-empty">No teammates yet — add them under Members</div>';
+      return;
+    }
+    if (!_mention.matches.length) {
+      box.innerHTML = '<div class="chat-mention-empty">No matching teammate</div>';
+      return;
+    }
+    // mousedown + preventDefault keeps focus (and the caret) in the textarea
+    box.innerHTML = _mention.matches.map((u, i) =>
+      `<div class="chat-mention-opt ${i === _mention.sel ? 'active' : ''}" role="option"
+            onmousedown="event.preventDefault(); Chat.pickMention(${i})">
+        <strong>${escHtml(u.name)}</strong> <span>@${escHtml(_handleOf(u.name))}</span>
+      </div>`).join('');
+  }
+
+  function pickMention(i) {
+    if (!_mention?.matches[i]) return;
+    const input = document.getElementById('chat-input');
+    const handle = '@' + _handleOf(_mention.matches[i].name) + ' ';
+    const caret = input.selectionStart;
+    input.value = input.value.slice(0, _mention.start) + handle + input.value.slice(caret);
+    const pos = _mention.start + handle.length;
+    input.setSelectionRange(pos, pos);
+    _closeMentions();
+    input.focus();
+  }
+
+  // Returns true if the key was used by the open mention list.
+  function _mentionKey(e) {
+    if (!_mention) return false;
+    const n = _mention.matches.length;
+    if (e.key === 'Escape') { _closeMentions(); return true; }
+    if (!n) return false;
+    if (e.key === 'ArrowDown') { _mention.sel = (_mention.sel + 1) % n; _renderMentions(); return true; }
+    if (e.key === 'ArrowUp')   { _mention.sel = (_mention.sel - 1 + n) % n; _renderMentions(); return true; }
+    if (e.key === 'Enter' || e.key === 'Tab') { pickMention(_mention.sel); return true; }
+    return false;
+  }
+
   function _renderCompose() {
     document.getElementById('chat-compose').style.display = _canChat() ? '' : 'none';
     document.getElementById('chat-input').placeholder = _peer === null
@@ -180,6 +246,7 @@ const Chat = (() => {
     _drafts[_key()] = document.getElementById('chat-input').value;
     _peer = peer;
     _clearFiles();
+    _closeMentions();
     const input = document.getElementById('chat-input');
     input.value = _drafts[_key()] || '';
     document.getElementById('chat-alert').checked = false;
@@ -252,8 +319,14 @@ const Chat = (() => {
   document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('chat-input');
     input.addEventListener('keydown', e => {
+      if (_mentionKey(e)) { e.preventDefault(); return; }
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
     });
+    input.addEventListener('keyup', e => {
+      if (!['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(e.key)) _updateMentions();
+    });
+    input.addEventListener('click', _updateMentions);
+    input.addEventListener('blur', () => setTimeout(_closeMentions, 150));
     document.getElementById('chat-file').addEventListener('change', e => _addFiles([...e.target.files]));
     // Pasting a screenshot / copied image attaches it
     input.addEventListener('paste', e => {
@@ -261,10 +334,11 @@ const Chat = (() => {
       if (pasted.length) { e.preventDefault(); _addFiles(pasted); }
     });
     input.addEventListener('input', () => {
+      _updateMentions();
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight, 120) + 'px';
     });
   });
 
-  return { load, send, startPolling, removeFile, open };
+  return { load, send, startPolling, removeFile, open, pickMention };
 })();

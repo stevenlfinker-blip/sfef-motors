@@ -962,7 +962,13 @@ th.sortable:hover { color: var(--accent); }
 .chat-alert-tag { color: var(--red); font-weight: 700; letter-spacing: 1px; font-size: 10px; }
 .chat-body { white-space: pre-wrap; word-break: break-word; }
 .chat-mention { color: var(--accent); font-weight: 600; }
-.chat-compose { border-top: 1px solid var(--border); padding: 12px 16px; }
+.chat-compose { border-top: 1px solid var(--border); padding: 12px 16px; position: relative; }
+.chat-mentions { position: absolute; left: 16px; right: 16px; bottom: 100%; margin-bottom: 4px; background: var(--card); border: 1px solid var(--border-light); border-radius: var(--radius); box-shadow: 0 -8px 24px rgba(0,0,0,.5); max-height: 240px; overflow-y: auto; z-index: 20; }
+.chat-mentions.hidden { display: none; }
+.chat-mention-opt { padding: 10px 12px; cursor: pointer; font-size: 13px; display: flex; gap: 8px; align-items: baseline; }
+.chat-mention-opt span { color: var(--text-muted); font-size: 12px; }
+.chat-mention-opt.active, .chat-mention-opt:hover { background: var(--accent-dim); color: var(--accent); }
+.chat-mention-empty { padding: 10px 12px; font-size: 12px; color: var(--text-muted); }
 .chat-compose textarea { width: 100%; resize: none; min-height: 40px; font-size: 16px; }
 .chat-compose-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 12px; font-size: 12px; }
 @media (max-width: 768px) {
