@@ -11,13 +11,28 @@ const Expenses = (() => {
   const CATEGORY_COLORS = ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'];
 
   function _categoryOrder() {
-    const order = ['Garage', ..._cars.slice().sort((a, b) => a.id - b.id).map(carLabel)];
+    // carLabelRaw (not carLabel) — e.category from the server is unescaped
+    // text, so comparisons/dedup here must use the same raw form or a car
+    // name with &, <, >, or " would show up as two separate categories.
+    const order = ['Garage', ..._cars.slice().sort((a, b) => a.id - b.id).map(carLabelRaw)];
     const seen = new Set(order);
     for (const e of _items) {
       const cat = e.category || 'Garage';
       if (!seen.has(cat)) { order.push(cat); seen.add(cat); }
     }
     return order;
+  }
+
+  // Maps a category string (as shown in the filter/summary) back to the
+  // car_id it represents, so a clicked category card can be carried into
+  // the Add/Scan forms as the default. Returns null for Garage, undefined
+  // if the category doesn't resolve to a currently-active car (no filter
+  // selected, or an archived car's label with no matching live car).
+  function _categoryToCarId(cat) {
+    if (!cat) return undefined;
+    if (cat === 'Garage') return null;
+    const car = _cars.find(c => carLabelRaw(c) === cat);
+    return car ? car.id : undefined;
   }
 
   // _categoryOrder() walks every item, so this is built once per render —
@@ -240,6 +255,7 @@ const Expenses = (() => {
 
   let _scanItems = []; // [{ id, file, status: 'scanning'|'scanned'|'error', fields }]
   let _scanSeq = 0;
+  let _scanDefaultCarId; // category (car_id, null for Garage, or undefined) active when Scan Receipts was opened
 
   function _scanItemHtml(item) {
     const f = item.fields || {};
@@ -274,7 +290,7 @@ const Expenses = (() => {
             </div>
             <div class="form-row">
               <label>Category</label>
-              <select id="sf-car-${id}">${_categoryOptsHtml()}</select>
+              <select id="sf-car-${id}">${_categoryOptsHtml(_scanDefaultCarId)}</select>
             </div>
           </div>
           <div class="form-row">
@@ -306,6 +322,7 @@ const Expenses = (() => {
 
   function openScanReceipt() {
     _scanItems = [];
+    _scanDefaultCarId = _categoryToCarId(document.getElementById('expenses-filter-cat').value);
     Modal.show('Scan Receipts', `
       <div class="form-row">
         <label>Receipt Photos / PDFs</label>
@@ -417,7 +434,8 @@ const Expenses = (() => {
   }
 
   function openAdd() {
-    Modal.show('Add Expense', formHtml(), async () => {
+    const activeCat = document.getElementById('expenses-filter-cat').value;
+    Modal.show('Add Expense', formHtml({ car_id: _categoryToCarId(activeCat) }), async () => {
       const desc   = document.getElementById('f-desc').value.trim();
       const amount = document.getElementById('f-amount').value;
       if (!desc || !amount) { Toast.show('Description and amount are required', 'error'); return; }

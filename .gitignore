@@ -8,3 +8,4 @@ data/import-staging/
 .DS_Store
 .env
 data/vapid.json
+.env.save
