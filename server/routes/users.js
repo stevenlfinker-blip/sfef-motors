@@ -5,7 +5,7 @@ const { hashPassword, verifyPassword, handleOf } = require('../auth');
 const { testEmail } = require('../mailer');
 
 const PUBLIC = 'id, name, is_admin, notify_email';
-const FULL = 'id, name, email, is_admin, notify_email, created_at';
+const FULL = 'id, name, email, is_admin, notify_email, notify_push, push_previews, created_at';
 const MIN_PASSWORD = 8;
 
 function requireAdmin(req, res, next) {
@@ -35,14 +35,17 @@ router.get('/', (req, res) => {
 
 router.get('/me', (req, res) => {
   const me = req.user.id ? db.prepare(`SELECT ${FULL} FROM users WHERE id = ?`).get(req.user.id) : null;
-  res.json({ id: req.user.id, name: req.user.name, isAdmin: req.user.isAdmin, email: me?.email || '', notify_email: me ? me.notify_email : 0 });
+  res.json({
+    id: req.user.id, name: req.user.name, isAdmin: req.user.isAdmin, email: me?.email || '',
+    notify_email: me ? me.notify_email : 0, notify_push: me ? me.notify_push : 0, push_previews: me ? me.push_previews : 1,
+  });
 });
 
 router.put('/me', (req, res) => {
   if (!req.user.id) return res.status(400).json({ error: 'Shared-password sessions have no profile' });
-  const { notify_email, password, current_password } = req.body;
-  if (notify_email !== undefined) {
-    db.prepare('UPDATE users SET notify_email = ? WHERE id = ?').run(notify_email ? 1 : 0, req.user.id);
+  const { notify_email, notify_push, push_previews, password, current_password } = req.body;
+  for (const [col, val] of [['notify_email', notify_email], ['notify_push', notify_push], ['push_previews', push_previews]]) {
+    if (val !== undefined) db.prepare(`UPDATE users SET ${col} = ? WHERE id = ?`).run(val ? 1 : 0, req.user.id);
   }
   if (password) {
     if (password.length < MIN_PASSWORD) return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters` });

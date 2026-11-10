@@ -90,13 +90,62 @@ const Team = (() => {
     catch (e) { Toast.show(_err(e, 'Failed to remove member'), 'error'); }
   }
 
+  const PUSH_STATUS = {
+    enabled: '✓ On for this device',
+    off: 'Off for this device',
+    denied: 'Blocked — allow notifications for this site in your phone/browser settings',
+    'needs-install': 'iPhone: tap Share → Add to Home Screen, then open SFEF Motors from the icon',
+    unsupported: 'Not supported in this browser',
+  };
+
+  async function _renderPushRow() {
+    const el = document.getElementById('s-push-row');
+    if (!el) return;
+    const st = await Push.status();
+    el.innerHTML = `
+      <div style="font-size:13px;margin-bottom:8px">${escHtml(PUSH_STATUS[st])}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${st === 'off' ? '<button type="button" class="btn btn-primary btn-sm" onclick="Team.pushEnable()">Turn on for this device</button>' : ''}
+        ${st === 'enabled' ? '<button type="button" class="btn btn-secondary btn-sm" onclick="Team.pushTest()">Send test notification</button><button type="button" class="btn btn-ghost btn-sm" onclick="Team.pushDisable()">Turn off for this device</button>' : ''}
+      </div>`;
+  }
+
+  async function pushEnable() {
+    try {
+      const st = await Push.enable();
+      if (st === 'enabled') { document.getElementById('s-push').checked = true; Toast.show('Notifications on for this device'); }
+      else Toast.show(PUSH_STATUS[st] || 'Notifications not turned on', 'error');
+    } catch (e) { Toast.show(e.message, 'error'); }
+    _renderPushRow();
+  }
+
+  async function pushDisable() {
+    await Push.disable();
+    Toast.show('Notifications off for this device');
+    _renderPushRow();
+  }
+
+  async function pushTest() {
+    try {
+      const r = await API.post('/api/push/test', {});
+      Toast.show(r.sent ? `Sent to ${r.sent} device${r.sent > 1 ? 's' : ''} — check for a banner` : 'No devices received it', r.sent ? 'success' : 'error');
+    } catch (e) { Toast.show(_err(e, 'Test failed'), 'error'); }
+  }
+
   function openSettings() {
     Modal.show('My Settings', `
-      <div class="form-row"><label class="checkbox-row"><input type="checkbox" id="s-notify" ${App.me.notify_email ? 'checked' : ''}><span>Send me email alerts (assignments, @mentions, team alerts)</span></label></div>
+      <div class="form-row"><label>Notifications on this device</label><div id="s-push-row" style="font-size:13px;color:var(--text-muted)">Checking…</div></div>
+      <div class="form-row"><label class="checkbox-row"><input type="checkbox" id="s-push" ${App.me.notify_push ? 'checked' : ''}><span>Send me push notifications (all my devices)</span></label></div>
+      <div class="form-row"><label class="checkbox-row"><input type="checkbox" id="s-previews" ${App.me.push_previews ? 'checked' : ''}><span>Show private message text in notifications (off = just who it's from)</span></label></div>
+      <div class="form-row"><label class="checkbox-row"><input type="checkbox" id="s-notify" ${App.me.notify_email ? 'checked' : ''}><span>Send me email alerts (assignments, @mentions, team alerts, private messages)</span></label></div>
       <div class="form-row"><label>Current Password (only to change it)</label><input type="password" id="s-current" autocomplete="current-password"></div>
       <div class="form-row"><label>New Password (8+ characters)</label><input type="password" id="s-new" autocomplete="new-password"></div>`,
       async () => {
-        const payload = { notify_email: document.getElementById('s-notify').checked ? 1 : 0 };
+        const payload = {
+          notify_email: document.getElementById('s-notify').checked ? 1 : 0,
+          notify_push: document.getElementById('s-push').checked ? 1 : 0,
+          push_previews: document.getElementById('s-previews').checked ? 1 : 0,
+        };
         const np = document.getElementById('s-new').value;
         if (np) { payload.password = np; payload.current_password = document.getElementById('s-current').value; }
         try {
@@ -105,6 +154,7 @@ const Team = (() => {
           Modal.hide(); Toast.show('Settings saved'); load();
         } catch (e) { Toast.show(_err(e, 'Failed to save settings'), 'error'); }
       });
+    _renderPushRow();
   }
 
   function openTestEmail() {
@@ -129,5 +179,5 @@ const Team = (() => {
       }, { submitLabel: 'Send' });
   }
 
-  return { load, openAdd, openEdit, del, openSettings, openTestEmail };
+  return { load, openAdd, openEdit, del, openSettings, openTestEmail, pushEnable, pushDisable, pushTest };
 })();

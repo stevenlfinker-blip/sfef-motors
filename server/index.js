@@ -171,6 +171,7 @@ app.use('/api/events', require('./routes/events'));
 app.use('/api/watchlist', require('./routes/watchlist'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/chat', require('./routes/chat'));
+app.use('/api/push', require('./routes/push'));
 app.use('/api', require('./routes/import'));
 
 // ── Start ─────────────────────────────────────────

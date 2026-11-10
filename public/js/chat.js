@@ -202,6 +202,8 @@ const Chat = (() => {
 
   function _applyUnread(u) {
     _unread = u;
+    // number on the home-screen app icon (where the phone supports it)
+    try { u.total ? navigator.setAppBadge?.(u.total) : navigator.clearAppBadge?.(); } catch (_) {}
     for (const id of ['badge-chat', 'bnav-badge-chat']) {
       const badge = document.getElementById(id);
       badge.textContent = u.total > 99 ? '99+' : u.total;
@@ -233,7 +235,18 @@ const Chat = (() => {
     } catch (_) {}
   }
 
+  // Pick the conversation before the chat screen loads (notification taps).
+  function preselect(peer) {
+    if (peer === _peer) return;
+    _drafts[_key()] = document.getElementById('chat-input').value;
+    _peer = peer;
+    document.getElementById('chat-input').value = _drafts[_key()] || '';
+    _messages = []; _lastId = 0;
+    if (App.currentSection === 'chat') { _renderTabs(); _renderCompose(); _loadConversation(); }
+  }
+
   async function load() {
+    Push.renderBanner();
     await _loadMembers();
     _renderTabs();
     _renderCompose();
@@ -376,5 +389,5 @@ const Chat = (() => {
     });
   });
 
-  return { load, send, startPolling, removeFile, open, pickMention, clear };
+  return { load, send, startPolling, removeFile, open, preselect, pickMention, clear };
 })();

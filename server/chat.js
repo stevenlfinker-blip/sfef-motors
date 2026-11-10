@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('./db');
 const { notifyUsers } = require('./mailer');
+const { pushUsers } = require('./push');
 const { handleOf } = require('./auth');
 
 const MAX_LEN = 2000;
@@ -68,6 +69,11 @@ function purgeMessages(where, args = []) {
 // into the same conversation.
 function notifyForMessage({ sender, recipientId, body, files = [], isAlert = false }) {
   const emailBody = body + (files.length ? `${body ? '\n\n' : ''}[Attachments: ${files.map(f => f.name).join(', ')}]` : '');
+  // Short text for a phone banner
+  const fileNote = !files.length ? '' : files.length === 1
+    ? (/^image\//.test(files[0].type) ? '📷 Photo' : `📎 ${files[0].name}`)
+    : `📎 ${files.length} files`;
+  const preview = (body ? body.slice(0, 180) : '') + (fileNote ? `${body ? ' · ' : ''}${fileNote}` : '');
 
   if (recipientId) {
     // Private messages always email the recipient (unless they've turned
@@ -77,16 +83,25 @@ function notifyForMessage({ sender, recipientId, body, files = [], isAlert = fal
       `${isAlert ? '[URGENT] ' : ''}Private message from ${sender.name}`,
       `${sender.name} sent you a private message:\n\n${emailBody}`,
       sender.id);
+    // push_previews off = keep the message text off this person's lock screen
+    pushUsers([to], u => ({
+      title: `${isAlert ? '🔴 Urgent · ' : ''}${sender.name}`,
+      body: u.push_previews ? preview : 'New private message',
+      url: `/?chat=${sender.id}`,
+      tag: `dm-${sender.id}`,
+    }));
     return;
   }
 
   const others = db.prepare('SELECT * FROM users WHERE id != ?').all(sender.id);
   if (isAlert) {
     notifyUsers(others, `[ALERT] ${sender.name}`, `${sender.name} sent a team alert:\n\n${emailBody}`);
+    pushUsers(others, { title: `🔴 Team alert · ${sender.name}`, body: preview, url: '/?chat=team', tag: 'team-alert' });
   } else {
     const handles = new Set([...body.matchAll(/@([a-z0-9]+)/gi)].map(m => m[1].toLowerCase()));
     const mentioned = others.filter(u => handles.has(handleOf(u.name)));
     notifyUsers(mentioned, `${sender.name} mentioned you in SFEF chat`, `${sender.name} wrote:\n\n${emailBody}`);
+    pushUsers(mentioned, { title: `${sender.name} mentioned you`, body: preview, url: '/?chat=team', tag: 'team' });
   }
 }
 

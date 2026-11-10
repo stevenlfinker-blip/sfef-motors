@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const { postMessage } = require('../chat');
 const { notifyUsers } = require('../mailer');
+const { pushUsers } = require('../push');
 
 const SELECT = `
   SELECT m.*, c.make || ' ' || c.model || ' ' || c.year AS car_name, u.name AS assigned_name
@@ -39,6 +40,12 @@ function announceAssignment(actor, order) {
       order.due_date ? `Due: ${order.due_date}` : '',
       order.description ? `\n${order.description}` : '',
     ].filter(l => l !== '').join('\n'), actor.id || 0);
+    pushUsers([assignee], {
+      title: 'New work order',
+      body: `${actor.name} assigned you: ${order.title}${order.car_name ? ` (${order.car_name})` : ''}`,
+      url: '/?section=maintenance',
+      tag: `wo-${order.id}`,
+    });
   }
 }
 

@@ -369,7 +369,7 @@ tr:hover td { background: var(--elevated); }
 .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 label { display: block; font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; }
-input[type=text], input[type=number], input[type=date], input[type=email], input[type=file], select, textarea {
+input[type=text], input[type=number], input[type=date], input[type=email], input[type=password], input[type=file], select, textarea {
   width: 100%;
   background: var(--input-bg);
   border: 1px solid var(--border-light);
@@ -1034,3 +1034,12 @@ th.sortable:hover { color: var(--accent); }
 .chat-imgs.multi { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .chat-imgs.multi a { display: block; }
 .chat-imgs.multi .chat-img { width: 100%; height: 140px; max-height: none; object-fit: cover; }
+
+/* ── Push notification banner (chat screen) ── */
+.push-banner { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--accent-dim); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 8px 12px; margin-bottom: 10px; font-size: 13px; flex-shrink: 0; }
+.push-banner.hidden { display: none; }
+.push-banner-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+/* Checkbox labels in pop-ups read as sentences, not all-caps headings */
+#modal-body label.checkbox-row { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; color: var(--text); }
+.push-share-icon { width: 14px; height: 14px; vertical-align: -2px; }

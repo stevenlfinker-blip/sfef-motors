@@ -52,3 +52,36 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match(request))
   );
 });
+
+// ── Push notifications ─────────────────────────────
+// Every push must show a notification (iOS revokes permission otherwise).
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'SFEF Motors', {
+    body: d.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: d.tag,                // one banner per conversation, replaced by newer ones…
+    renotify: !!d.tag,         // …but still buzz for each new message
+    data: { url: d.url || '/' },
+  }));
+});
+
+// Tapping a notification opens the app at that conversation — reusing an
+// open window if there is one.
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = e.notification.data?.url || '/';
+  e.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const w of wins) {
+      if (new URL(w.url).origin === self.location.origin) {
+        await w.focus();
+        w.postMessage({ type: 'open', url });
+        return;
+      }
+    }
+    await self.clients.openWindow(url);
+  })());
+});

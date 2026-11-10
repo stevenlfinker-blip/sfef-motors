@@ -72,12 +72,42 @@ const App = {
     // Who's signed in — needed before Maintenance/Team/Chat render
     try { App.me = await API.get('/api/users/me'); } catch (_) {}
     Chat.startPolling();
+    Push.sync();
+
+    // Tapping a notification while the app is open: the service worker asks
+    // this window to jump to that conversation.
+    navigator.serviceWorker?.addEventListener('message', e => {
+      if (e.data?.type === 'open') App.openUrl(e.data.url);
+    });
 
     // Load initial data for badges
     App.refreshBadges();
 
-    // Load dashboard
-    Dashboard.load();
+    // Opened from a notification (/?chat=… or /?section=…) — go straight there
+    if (!App.openUrl(location.search)) Dashboard.load();
+    if (location.search) history.replaceState(null, '', '/');
+  },
+
+  // Handles notification links. Returns true if it navigated somewhere.
+  openUrl(url) {
+    const q = new URLSearchParams(String(url).includes('?') ? String(url).split('?')[1] : '');
+    if (q.has('chat')) {
+      const c = q.get('chat');
+      Chat.preselect(c === 'team' ? null : Number(c));
+      App.navigate('chat');
+      return true;
+    }
+    if (q.get('section') && SECTION_TITLES[q.get('section')]) {
+      App.navigate(q.get('section'));
+      return true;
+    }
+    return false;
+  },
+
+  // Stop this device's notifications for this account, then sign out.
+  async signOut() {
+    try { await Push.disable(); } catch (_) {}
+    window.location = '/logout';
   },
 
   toggleSidebar() {
