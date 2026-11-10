@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { publicKey, saveSubscription, removeSubscription, sendToUser } = require('../push');
+const { publicKey, saveSubscription, removeSubscription, sendToUser, markReceived, listDevices } = require('../push');
 
 function requireMember(req, res, next) {
   if (!req.user?.id) return res.status(403).json({ error: 'Sign in with your own account to get notifications.' });
@@ -23,10 +23,20 @@ router.post('/unsubscribe', (req, res) => {
 
 // "Send test notification" in My Settings — goes to all of my devices.
 router.post('/test', requireMember, async (req, res) => {
+  const startedAt = new Date().toISOString();
   const r = await sendToUser(req.user.id, {
     title: 'SFEF Motors', body: 'Notifications are working on this device 🎉', url: '/?chat=team', tag: 'test',
   });
-  res.json(r);
+  res.json({ ...r, startedAt });
 });
+
+// The service worker reports each notification it receives (and any error
+// showing it), so the test can tell "never arrived" from "arrived but hidden".
+router.post('/ack', requireMember, (req, res) => {
+  markReceived(req.user.id, Number(req.body.sid), req.body.error || '');
+  res.json({ success: true });
+});
+
+router.get('/devices', requireMember, (req, res) => res.json(listDevices(req.user.id)));
 
 module.exports = router;

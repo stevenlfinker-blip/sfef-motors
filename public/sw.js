@@ -58,14 +58,31 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'SFEF Motors', {
-    body: d.body || '',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    tag: d.tag,                // one banner per conversation, replaced by newer ones…
-    renotify: !!d.tag,         // …but still buzz for each new message
-    data: { url: d.url || '/' },
-  }));
+  e.waitUntil((async () => {
+    let error = '';
+    try {
+      await self.registration.showNotification(d.title || 'SFEF Motors', {
+        body: d.body || '',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        tag: d.tag,                // one banner per conversation, replaced by newer ones…
+        renotify: !!d.tag,         // …but still buzz for each new message
+        data: { url: d.url || '/' },
+      });
+    } catch (err) {
+      error = String(err && err.message || err);
+      // Still show something — iOS turns push off for apps that skip it.
+      await self.registration.showNotification(d.title || 'SFEF Motors', { body: d.body || '' }).catch(() => {});
+    }
+    // Tell the server it arrived (powers the delivery check in My Settings).
+    if (d.sid) {
+      await fetch('/api/push/ack', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sid: d.sid, error }),
+      }).catch(() => {});
+    }
+  })());
 });
 
 // Tapping a notification opens the app at that conversation — reusing an

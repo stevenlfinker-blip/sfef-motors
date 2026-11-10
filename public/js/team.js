@@ -125,16 +125,51 @@ const Team = (() => {
     _renderPushRow();
   }
 
+  function _deviceName(ua) {
+    ua = ua || '';
+    const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android'
+      : /Macintosh/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : 'Device';
+    const br = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome'
+      : /Safari\//.test(ua) ? 'Safari' : '';
+    return br && os !== 'iPhone' && os !== 'iPad' ? `${os} · ${br}` : os;
+  }
+
+  // Per-device delivery report: sent by the server → arrived on the device.
+  function _reportHtml(devices, startedAt, done) {
+    const rows = devices.map(d => {
+      const sentNow = d.last_sent_at && d.last_sent_at >= startedAt;
+      const gotNow = d.last_received_at && d.last_received_at >= startedAt;
+      let msg;
+      if (!sentNow) msg = '⚪ Not sent';
+      else if (/^rejected/.test(d.last_result)) msg = `❌ Rejected by the notification service — ${escHtml(d.last_result)}`;
+      else if (gotNow && d.last_device_error) msg = `⚠️ Arrived, but the device couldn't show it: ${escHtml(d.last_device_error)}`;
+      else if (gotNow) msg = '✅ Arrived on the device. If no banner showed, the device\'s own notification settings or Focus mode are hiding it.';
+      else msg = done ? '❌ Never arrived on the device' : '⏳ Waiting for the device…';
+      const isThis = d.user_agent === navigator.userAgent.slice(0, 200) ? ' (this device)' : '';
+      return `<div style="padding:6px 0;border-top:1px solid var(--border)"><strong>${escHtml(_deviceName(d.user_agent))}${isThis}</strong><br>${msg}</div>`;
+    }).join('');
+    return `<div style="margin-top:10px;font-size:12px">${rows || 'No devices are signed up.'}</div>`;
+  }
+
   async function pushTest() {
+    const box = document.getElementById('s-push-report');
     try {
       const r = await API.post('/api/push/test', {});
-      Toast.show(r.sent ? `Sent to ${r.sent} device${r.sent > 1 ? 's' : ''} — check for a banner` : 'No devices received it', r.sent ? 'success' : 'error');
+      if (!box) { Toast.show(r.sent ? 'Test sent' : 'No devices received it', r.sent ? 'success' : 'error'); return; }
+      // Devices report back within a few seconds; give them up to 20.
+      for (let i = 0; i < 10; i++) {
+        const devices = await API.get('/api/push/devices');
+        const waiting = devices.some(d => d.last_sent_at >= r.startedAt && !/^rejected/.test(d.last_result) && !(d.last_received_at >= r.startedAt));
+        box.innerHTML = _reportHtml(devices, r.startedAt, !waiting || i === 9);
+        if (!waiting) break;
+        await new Promise(res => setTimeout(res, 2000));
+      }
     } catch (e) { Toast.show(_err(e, 'Test failed'), 'error'); }
   }
 
   function openSettings() {
     Modal.show('My Settings', `
-      <div class="form-row"><label>Notifications on this device</label><div id="s-push-row" style="font-size:13px;color:var(--text-muted)">Checking…</div></div>
+      <div class="form-row"><label>Notifications on this device</label><div id="s-push-row" style="font-size:13px;color:var(--text-muted)">Checking…</div><div id="s-push-report"></div></div>
       <div class="form-row"><label class="checkbox-row"><input type="checkbox" id="s-push" ${App.me.notify_push ? 'checked' : ''}><span>Send me push notifications (all my devices)</span></label></div>
       <div class="form-row"><label class="checkbox-row"><input type="checkbox" id="s-previews" ${App.me.push_previews ? 'checked' : ''}><span>Show private message text in notifications (off = just who it's from)</span></label></div>
       <div class="form-row"><label class="checkbox-row"><input type="checkbox" id="s-notify" ${App.me.notify_email ? 'checked' : ''}><span>Send me email alerts (assignments, @mentions, team alerts, private messages)</span></label></div>

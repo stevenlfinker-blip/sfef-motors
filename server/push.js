@@ -20,6 +20,11 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 `);
+// Delivery tracking: what the push service said, and when the device's
+// service worker confirmed it actually received the notification.
+for (const col of ['last_sent_at TEXT', "last_result TEXT DEFAULT ''", 'last_received_at TEXT', "last_device_error TEXT DEFAULT ''"]) {
+  try { db.exec(`ALTER TABLE push_subscriptions ADD COLUMN ${col}`); } catch (e) { /* already exists */ }
+}
 try { db.exec("ALTER TABLE users ADD COLUMN notify_push INTEGER DEFAULT 1"); } catch (e) { /* already exists */ }
 try { db.exec("ALTER TABLE users ADD COLUMN push_previews INTEGER DEFAULT 1"); } catch (e) { /* already exists */ }
 
@@ -61,16 +66,20 @@ function removeSubscription(endpoint) {
 async function sendToUser(userId, payload) {
   const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(userId);
   let sent = 0, failed = 0;
+  const mark = db.prepare('UPDATE push_subscriptions SET last_sent_at = ?, last_result = ? WHERE id = ?');
   await Promise.all(subs.map(async s => {
     try {
-      await webpush.sendNotification(
+      // sid lets the device's service worker report back that it got it.
+      const r = await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        JSON.stringify(payload),
+        JSON.stringify({ ...payload, sid: s.id }),
         { TTL: 24 * 60 * 60, urgency: 'high' },
       );
+      mark.run(new Date().toISOString(), `accepted (${r.statusCode})`, s.id);
       sent++;
     } catch (e) {
       failed++;
+      mark.run(new Date().toISOString(), `rejected (${e.statusCode || e.code || 'error'}): ${String(e.body || e.message).slice(0, 150)}`, s.id);
       // 404/410: the device unsubscribed or the app was removed — forget it.
       if (e.statusCode === 404 || e.statusCode === 410) removeSubscription(s.endpoint);
       else console.error(`[push] send failed (${e.statusCode || e.code || ''}): ${e.body || e.message}`);
