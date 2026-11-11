@@ -4,7 +4,7 @@
 //
 // GOOGLE_MAPS_SERVER_KEY must have the Routes API enabled. Google bills past
 // its free monthly allowance, so calls are capped per day (GOOGLE_DAILY_CAP).
-const DAILY_CAP = Number(process.env.GOOGLE_DAILY_CAP || 300);
+const DAILY_CAP = Number(process.env.GOOGLE_DAILY_CAP || 150); // ~4,500/month worst case
 let _day = '', _used = 0;
 
 function enabled() { return !!process.env.GOOGLE_MAPS_SERVER_KEY; }
