@@ -29,6 +29,10 @@ function validate({ name, email, password }, { passwordRequired }) {
   return null;
 }
 
+// Dashboard panels each person has hidden (JSON array of panel keys).
+try { db.exec("ALTER TABLE users ADD COLUMN dashboard_hidden TEXT DEFAULT '[]'"); } catch (e) { /* already exists */ }
+const parseHidden = s => { try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a : []; } catch (_) { return []; } };
+
 router.get('/', (req, res) => {
   res.json(db.prepare(`SELECT ${req.user?.isAdmin ? FULL : PUBLIC} FROM users ORDER BY name`).all());
 });
@@ -38,12 +42,17 @@ router.get('/me', (req, res) => {
   res.json({
     id: req.user.id, name: req.user.name, isAdmin: req.user.isAdmin, email: me?.email || '',
     notify_email: me ? me.notify_email : 0, notify_push: me ? me.notify_push : 0, push_previews: me ? me.push_previews : 1,
+    dashboard_hidden: me ? parseHidden(db.prepare('SELECT dashboard_hidden FROM users WHERE id = ?').get(req.user.id)?.dashboard_hidden) : null,
   });
 });
 
 router.put('/me', (req, res) => {
   if (!req.user.id) return res.status(400).json({ error: 'Shared-password sessions have no profile' });
-  const { notify_email, notify_push, push_previews, password, current_password } = req.body;
+  const { notify_email, notify_push, push_previews, password, current_password, dashboard_hidden } = req.body;
+  if (Array.isArray(dashboard_hidden)) {
+    const clean = dashboard_hidden.filter(k => typeof k === 'string' && /^[a-z-]{1,30}$/.test(k)).slice(0, 30);
+    db.prepare('UPDATE users SET dashboard_hidden = ? WHERE id = ?').run(JSON.stringify(clean), req.user.id);
+  }
   for (const [col, val] of [['notify_email', notify_email], ['notify_push', notify_push], ['push_previews', push_previews]]) {
     if (val !== undefined) db.prepare(`UPDATE users SET ${col} = ? WHERE id = ?`).run(val ? 1 : 0, req.user.id);
   }

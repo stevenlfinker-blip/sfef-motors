@@ -26,6 +26,30 @@ const Drive = (() => {
   const gmapsUrl = (lat, lon, z = 14) => `https://www.google.com/maps/@${lat},${lon},${z}z/data=!5m1!1e1`;
 
   function recent() { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (_) { return []; } }
+  function forget(i) {
+    try {
+      const list = recent(); list.splice(i, 1);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+    } catch (_) {}
+    redrawChips();
+  }
+  function clearRecent() {
+    try { localStorage.removeItem(RECENT_KEY); } catch (_) {}
+    redrawChips();
+  }
+  function chipsHtml() {
+    const rec = recent();
+    return `<button type="button" class="drive-chip ${_place ? '' : 'active'}" onclick="Drive.garage()">🏠 Garage area</button>
+      ${rec.map((r, i) => `<span class="drive-chip drive-chip-saved ${_place?.name === r.name ? 'active' : ''}">
+        <button type="button" class="drive-chip-go" onclick="Drive.pickRecent(${i})">${escHtml(r.name)}</button>
+        <button type="button" class="drive-chip-x" onclick="Drive.forget(${i})" aria-label="Remove ${escHtml(r.name)}" title="Remove">✕</button>
+      </span>`).join('')}
+      ${rec.length > 1 ? '<button type="button" class="drive-chip drive-chip-clear" onclick="Drive.clearRecent()">Clear all</button>' : ''}`;
+  }
+  function redrawChips() {
+    const el = document.getElementById('drive-chips');
+    if (el) el.innerHTML = chipsHtml();
+  }
   function remember(p) {
     try {
       const list = [p, ...recent().filter(r => r.name !== p.name)].slice(0, 5);
@@ -231,16 +255,12 @@ const Drive = (() => {
 
   // ── Page ──
   function shell() {
-    const rec = recent();
     return `
       <form class="drive-search" onsubmit="event.preventDefault(); Drive.search()">
         <input type="search" id="drive-q" placeholder="Search a place or address" autocomplete="off" enterkeyhint="search">
         <button type="submit" class="btn btn-primary">Search</button>
       </form>
-      <div class="drive-chips">
-        <button type="button" class="drive-chip ${_place ? '' : 'active'}" onclick="Drive.garage()">🏠 Garage area</button>
-        ${rec.map((r, i) => `<button type="button" class="drive-chip ${_place?.name === r.name ? 'active' : ''}" onclick="Drive.pickRecent(${i})">${escHtml(r.name)}</button>`).join('')}
-      </div>
+      <div class="drive-chips" id="drive-chips">${chipsHtml()}</div>
       <div id="drive-results"></div>
       <div id="drive-body"></div>`;
   }
@@ -387,7 +407,7 @@ const Drive = (() => {
   }
 
   return {
-    load, reload, reverify, loadWx, search, garage, summaryBar,
+    load, reload, reverify, loadWx, search, garage, summaryBar, forget, clearRecent,
     pick: i => { document.getElementById('drive-results').innerHTML = ''; select(Drive._results[i]); },
     pickRecent: i => select(recent()[i]),
     _results: [],

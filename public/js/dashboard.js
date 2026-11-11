@@ -980,25 +980,25 @@ const Dashboard = (() => {
       const valuationMap = {};
       marketVals.forEach(v => { valuationMap[v.car_id] = v; });
 
+      const hidden = new Set(hiddenPanels());
+      const show = k => !hidden.has(k);
+      const showColl = show('collection'), showDaily = show('daily');
       el.innerHTML =
         hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist, valuationMap) +
-        collectiblesMarketWidget(cars, valuationMap, marketHistory) +
-        '<div class="dash-grid-2-wide" style="margin-top:12px">' +
-          monthlySpendWidget(costs) +
-          spendByCatWidget(costs) +
-        '</div>' +
-        '<div class="dash-full">' + fleetStatusWidget(cars) + '</div>' +
-        mileageTrackerWidget(cars) +
-        '<div class="dash-full">' + watchlistWidget(watchlist) + '</div>' +
-        '<div class="dash-grid-2">' +
-          collectionValueWidget(cars, valuationMap) +
-          dailyFleetValueWidget(cars, valuationMap) +
-        '</div>' +
-        '<div class="dash-full">' + upcomingEventsWidget(events) + '</div>' +
-        '<div class="dash-full">' + pendingMaintWidget(maint) + '</div>';
+        `<div class="dash-toolbar"><button type="button" class="btn btn-ghost btn-sm" onclick="Dashboard.customize()">⚙ Customize dashboard</button></div>` +
+        (show('market') ? collectiblesMarketWidget(cars, valuationMap, marketHistory) : '') +
+        (show('spending') ? '<div class="dash-grid-2-wide" style="margin-top:12px">' + monthlySpendWidget(costs) + spendByCatWidget(costs) + '</div>' : '') +
+        (show('mileage') ? mileageTrackerWidget(cars) : '') +
+        (showColl || showDaily ? `<div class="${showColl && showDaily ? 'dash-grid-2' : 'dash-full'}">` +
+          (showColl ? collectionValueWidget(cars, valuationMap) : '') +
+          (showDaily ? dailyFleetValueWidget(cars, valuationMap) : '') +
+        '</div>' : '') +
+        (show('events') ? '<div class="dash-full">' + upcomingEventsWidget(events) + '</div>' : '') +
+        (show('maintenance') ? '<div class="dash-full">' + pendingMaintWidget(maint) + '</div>' : '');
       startHudClock();
-      _initMktChart();
-      refreshDriveBar(); // separate request so slow weather never holds up the dashboard
+      if (show('market')) _initMktChart();
+      if (show('drive')) refreshDriveBar(); // separate request so slow weather never holds up the dashboard
+      else document.getElementById('drive-summary')?.remove();
     } catch (err) {
       if (err.message === 'Session expired') return;
       el.innerHTML = `<div style="color:var(--red);padding:20px">Failed to load dashboard: ${escHtml(err.message)}<br>
@@ -1006,7 +1006,51 @@ const Dashboard = (() => {
     }
   }
 
-  // ── Watchlist public actions ──────────────────────
+  // ── Customize: which panels show on the dashboard ──
+  // Saved to the signed-in person's account (so phone and computer match);
+  // the shared-password login keeps it on this device instead.
+  const PANELS = [
+    ['drive', 'Driving conditions bar'], ['market', 'Collectibles Market Intelligence'],
+    ['spending', 'Monthly spending & by category'], ['mileage', 'Mileage tracker'],
+    ['collection', 'Collection'], ['daily', 'Daily Drivers'],
+    ['events', 'Upcoming events'], ['maintenance', 'Pending maintenance'],
+  ];
+  function hiddenPanels() {
+    if (App.me?.id && Array.isArray(App.me.dashboard_hidden)) return App.me.dashboard_hidden;
+    try { return JSON.parse(localStorage.getItem('dashboard-hidden')) || []; } catch (_) { return []; }
+  }
+  function customize() {
+    const hidden = new Set(hiddenPanels());
+    Modal.show('Customize Dashboard', `
+      <div class="form-row"><label>Show on the dashboard</label>
+        ${PANELS.map(([k, label]) => `<label class="checkbox-row"><input type="checkbox" data-panel="${k}" ${hidden.has(k) ? '' : 'checked'}><span>${escHtml(label)}</span></label>`).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--text-muted)">The Acquisition Watchlist now has its own tab under Dashboard.</div>`,
+    async () => {
+      const next = [...document.querySelectorAll('[data-panel]')].filter(i => !i.checked).map(i => i.dataset.panel);
+      try {
+        if (App.me?.id) { await API.put('/api/users/me', { dashboard_hidden: next }); App.me.dashboard_hidden = next; }
+        else { try { localStorage.setItem('dashboard-hidden', JSON.stringify(next)); } catch (_) {} }
+        Modal.hide();
+        Toast.show('Dashboard updated');
+        load();
+      } catch (e) { Toast.show('Could not save', 'error'); }
+    });
+  }
+
+  // ── Acquisition Watchlist tab ──
+  async function loadWatchlist() {
+    const el = document.getElementById('watchlist-content');
+    if (!el) return;
+    try {
+      el.innerHTML = watchlistWidget(await API.get('/api/watchlist'));
+    } catch (e) {
+      el.innerHTML = `<div style="color:var(--red);padding:20px">Failed to load watchlist. <button class="btn btn-secondary btn-sm" onclick="Dashboard.loadWatchlist()">Retry</button></div>`;
+    }
+  }
+  // After a watchlist change, refresh whichever screen is showing.
+  const reloadWatch = () => (App.currentSection === 'watchlist' ? loadWatchlist() : load());
+
   function watchlistAdd() {
     Modal.show('Add to Watchlist', watchlistFormHtml(), async () => {
       const data = collectWatchlist();
@@ -1015,7 +1059,7 @@ const Dashboard = (() => {
         await API.post('/api/watchlist', data);
         Modal.hide();
         Toast.show('Added to watchlist');
-        load();
+        reloadWatch();
         App.refreshBadges();
       } catch (e) { Toast.show('Failed to save', 'error'); }
     });
@@ -1032,7 +1076,7 @@ const Dashboard = (() => {
         await API.put(`/api/watchlist/${id}`, data);
         Modal.hide();
         Toast.show('Watchlist updated');
-        load();
+        reloadWatch();
       } catch (e) { Toast.show('Failed to update', 'error'); }
     });
   }
@@ -1042,10 +1086,10 @@ const Dashboard = (() => {
     try {
       await API.del(`/api/watchlist/${id}`);
       Toast.show('Removed from watchlist');
-      load();
+      reloadWatch();
       App.refreshBadges();
     } catch (e) { Toast.show('Failed to delete', 'error'); }
   }
 
-  return { load, watchlistAdd, watchlistEdit, watchlistDel, _mktToggle, _noteToggle };
+  return { load, loadWatchlist, customize, watchlistAdd, watchlistEdit, watchlistDel, _mktToggle, _noteToggle };
 })();

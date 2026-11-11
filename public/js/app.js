@@ -42,6 +42,7 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
 // ── Navigation ─────────────────────────────────────
 const SECTION_TITLES = {
   dashboard:   'Dashboard',
+  watchlist:   'Acquisition Watchlist',
   drive:       'Driving Conditions',
   cars:        'Fleet · Cars',
   maintenance: 'Fleet · Maintenance',
@@ -148,6 +149,7 @@ const App = {
     // Load section data
     switch (section) {
       case 'dashboard':   Dashboard.load(); break;
+      case 'watchlist':   Dashboard.loadWatchlist(); break;
       case 'drive':       Drive.load(); break;
       case 'cars':        Cars.load(); break;
       case 'maintenance': Maintenance.load(); break;
@@ -172,7 +174,7 @@ const App = {
 
   async refreshBadges() {
     try {
-      const [cars, maint, parts, tools, cleaning, events, other] = await Promise.all([
+      const [cars, maint, parts, tools, cleaning, events, other, watchlist] = await Promise.all([
         API.get('/api/cars'),
         API.get('/api/maintenance'),
         API.get('/api/parts'),
@@ -180,7 +182,9 @@ const App = {
         API.get('/api/cleaning'),
         API.get('/api/events'),
         API.get('/api/other'),
+        API.get('/api/watchlist').catch(() => []),
       ]);
+      document.getElementById('badge-watchlist').textContent = watchlist.length;
       document.getElementById('badge-cars').textContent = cars.length;
       document.getElementById('badge-maintenance').textContent = maint.filter(m => !m.completed).length;
       document.getElementById('badge-parts').textContent = parts.length;

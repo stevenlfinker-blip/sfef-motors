@@ -1181,3 +1181,9 @@ th.sortable:hover { color: var(--accent); }
 .drive-meter span { display: block; height: 100%; background: var(--lvl); }
 .drive-meter.lvl-good { --lvl: var(--green); } .drive-meter.lvl-fair { --lvl: var(--orange); } .drive-meter.lvl-poor { --lvl: var(--red); }
 .drive-panel a { color: var(--accent); }
+.drive-chip-saved { display: inline-flex; align-items: center; padding: 0; overflow: visible; }
+.drive-chip-go { background: none; border: none; color: inherit; font: inherit; padding: 5px 4px 5px 10px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.drive-chip-x { background: none; border: none; color: var(--text-muted); font-size: 11px; padding: 5px 9px 5px 4px; cursor: pointer; }
+.drive-chip-x:hover { color: var(--red); }
+.drive-chip-clear { color: var(--text-muted); border-style: dashed; }
+.dash-toolbar { display: flex; justify-content: flex-end; margin: -8px 0 8px; }
