@@ -1107,3 +1107,7 @@ th.sortable:hover { color: var(--accent); }
   .drive-tile:last-child { grid-column: 1 / -1; }
   .drive-headline { font-size: 18px; }
 }
+.drive-corridors { display: flex; flex-direction: column; gap: 3px; }
+.drive-corridor { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text); }
+.drive-corridor-mph { margin-left: auto; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.drive-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lvl); flex: none; }

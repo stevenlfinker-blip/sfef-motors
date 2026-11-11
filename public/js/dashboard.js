@@ -961,7 +961,9 @@ const Dashboard = (() => {
       <div class="drive-tile lvl-${f.level}">
         <div class="drive-tile-top"><span>${COND_ICONS[f.key] || ''} ${escHtml(f.label)}</span><span class="drive-pill">${COND_WORD[f.level]}</span></div>
         <div class="drive-tile-value">${escHtml(f.value)}</div>
-        <div class="drive-tile-detail">${escHtml(f.detail)}${f.key === 'traffic' && f.live ? ' · live' : ''}</div>
+        ${f.corridors ? `<div class="drive-corridors">${f.corridors.map(c => `
+          <div class="drive-corridor lvl-${c.level}"><span class="drive-dot"></span><span>${escHtml(c.name)}</span><span class="drive-corridor-mph">${c.speed} mph</span></div>`).join('')}</div>` : ''}
+        <div class="drive-tile-detail">${escHtml(f.detail)}</div>
       </div>`).join('');
     const alerts = d.alerts.length ? `<div class="drive-alerts">⚠️ ${d.alerts.map(a => escHtml(a.event)).join(' · ')}</div>` : '';
     return `

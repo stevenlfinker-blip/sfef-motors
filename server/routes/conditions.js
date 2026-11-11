@@ -15,12 +15,26 @@ const PLACE = process.env.GARAGE_PLACE || 'North Miami';
 const TZ = 'America/New_York';
 const CACHE_MS = 15 * 60 * 1000;
 
-// Main roads near the garage for live traffic, all at ~125th St. Positions
-// checked against Google Maps' traffic layer on 2026-11-11.
-const TRAFFIC_POINTS = [
-  { name: 'I-95', lat: 25.890, lon: -80.2095 },
-  { name: 'NE 125th St', lat: 25.890, lon: -80.189 },
-  { name: 'Biscayne Blvd', lat: 25.8905, lon: -80.1635 },
+// Live traffic check points (~25 mile area), grouped into corridors.
+// Positions come from OpenStreetMap road geometry (2026-11-11); the I-95 point
+// at 125th St was also confirmed on Google Maps' traffic layer. I-95 is
+// sampled in both directions — northbound lanes sit on the east side, so each
+// point is nudged ~15 m outward to make TomTom snap to the right carriageway.
+const NB = 0.00015, SB = -0.00015;
+const CORRIDORS = [
+  { name: 'I-95', points: [
+    ['Downtown NB', 25.78993, -80.20423 + NB], ['Downtown SB', 25.79005, -80.20485 + SB],
+    ['125th St NB', 25.89046, -80.20918 + NB], ['125th St SB', 25.89067, -80.20953 + SB],
+    ['Aventura NB', 25.97902, -80.16585 + NB], ['Aventura SB', 25.97895, -80.16620 + SB],
+    ['Hollywood NB', 26.08030, -80.16856 + NB], ['Hollywood SB', 26.07954, -80.16907 + SB],
+    ['Ft Lauderdale NB', 26.19098, -80.15158 + NB], ['Ft Lauderdale SB', 26.19099, -80.15194 + SB],
+  ] },
+  { name: 'Collins Ave', points: [
+    ['Mid-Beach', 25.81495, -80.12272], ['Surfside', 25.87805, -80.12185],
+    ['Bal Harbour', 25.88940, -80.12390], ['Sunny Isles', 25.93508, -80.12162],
+  ] },
+  { name: 'Bay Harbor', points: [['Broad Causeway', 25.88820, -80.14497]] },
+  { name: 'Local', points: [['NE 125th St', 25.890, -80.189], ['Biscayne Blvd', 25.8905, -80.1635]] },
 ];
 
 let _cache = null; // { at, data }
@@ -116,20 +130,43 @@ function estimateTraffic(now) {
   return { key: 'traffic', label: 'Traffic', level, value, detail: 'Estimate by time of day — not live', live: false };
 }
 
+const trafficLevel = r => (r >= 0.8 ? 'good' : r >= 0.55 ? 'fair' : 'poor');
+
+async function flowAt(key, lat, lon) {
+  const d = await getJson(`https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json?point=${lat},${lon}&unit=MPH&key=${encodeURIComponent(key)}`);
+  const f = d.flowSegmentData;
+  return { ratio: f.roadClosure ? 0 : Math.min(1, f.currentSpeed / f.freeFlowSpeed), speed: f.currentSpeed, free: f.freeFlowSpeed, closed: !!f.roadClosure };
+}
+
 async function liveTraffic(key) {
-  const segs = await Promise.all(TRAFFIC_POINTS.map(async p => {
-    const d = await getJson(`https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json?point=${p.lat},${p.lon}&unit=MPH&key=${encodeURIComponent(key)}`);
-    const f = d.flowSegmentData;
-    return { name: p.name, ratio: f.roadClosure ? 0 : f.currentSpeed / f.freeFlowSpeed, speed: f.currentSpeed };
-  }));
-  // Average across the three roads; one jammed road makes it at least "fair".
-  const avg = segs.reduce((s, x) => s + x.ratio, 0) / segs.length;
-  const slowest = segs.reduce((a, b) => (b.ratio < a.ratio ? b : a));
-  let level = avg >= 0.8 ? 'good' : avg >= 0.55 ? 'fair' : 'poor';
-  if (level === 'good' && slowest.ratio < 0.5) level = 'fair';
-  const value = level === 'good' ? 'Flowing' : level === 'fair' ? 'Slow' : 'Heavy';
-  const detail = segs.map(s => `${s.name} ${Math.round(s.speed)} mph`).join(' · ') + ' · TomTom';
-  return { key: 'traffic', label: 'Traffic', level, value, detail, live: true };
+  // 17 points per refresh; a few at a time to stay polite with the free tier.
+  const jobs = CORRIDORS.flatMap(c => c.points.map(([label, lat, lon]) => ({ corridor: c.name, label, lat, lon })));
+  const results = [];
+  for (let i = 0; i < jobs.length; i += 5) {
+    results.push(...await Promise.all(jobs.slice(i, i + 5).map(j =>
+      flowAt(key, j.lat, j.lon).then(r => ({ ...j, ...r })).catch(e => ({ ...j, error: e.message })))));
+  }
+  const ok = results.filter(r => !r.error);
+  if (ok.length < jobs.length / 2) throw new Error(results.find(r => r.error)?.error || 'no data');
+
+  const corridors = CORRIDORS.map(c => {
+    const pts = ok.filter(r => r.corridor === c.name);
+    if (!pts.length) return null;
+    const ratio = pts.reduce((s, p) => s + p.ratio, 0) / pts.length;
+    const speed = Math.round(pts.reduce((s, p) => s + p.speed, 0) / pts.length);
+    const slowest = pts.reduce((a, b) => (b.ratio < a.ratio ? b : a));
+    return { name: c.name, level: trafficLevel(ratio), ratio: Math.round(ratio * 100) / 100, speed,
+      slowest: slowest.ratio < 0.55 ? `${slowest.label} ${Math.round(slowest.speed)} mph` : null };
+  }).filter(Boolean);
+
+  // Every corridor counts equally, so 10 I-95 points don't drown out Collins.
+  const avg = corridors.reduce((s, c) => s + c.ratio, 0) / corridors.length;
+  let level = trafficLevel(avg);
+  if (level === 'good' && corridors.some(c => c.level === 'poor')) level = 'fair';
+  const value = level === 'good' ? 'Flowing' : level === 'fair' ? 'Slow in spots' : 'Heavy';
+  const jams = corridors.filter(c => c.slowest).map(c => c.slowest);
+  const detail = (jams.length ? `Slowest: ${jams.slice(0, 2).join(', ')}` : 'No major slowdowns') + ' · TomTom';
+  return { key: 'traffic', label: 'Traffic', level, value, detail, live: true, corridors };
 }
 
 async function build() {
