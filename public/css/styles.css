@@ -1175,3 +1175,9 @@ th.sortable:hover { color: var(--accent); }
   .drive-map { height: 300px; }
   .drive-table th:nth-child(4), .drive-table td:nth-child(4) { white-space: normal; }
 }
+.drive-flood-row { display: flex; flex-direction: column; gap: 5px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.drive-flood-row:first-child { border-top: none; padding-top: 0; }
+.drive-meter { height: 6px; background: var(--elevated); border-radius: 3px; overflow: hidden; }
+.drive-meter span { display: block; height: 100%; background: var(--lvl); }
+.drive-meter.lvl-good { --lvl: var(--green); } .drive-meter.lvl-fair { --lvl: var(--orange); } .drive-meter.lvl-poor { --lvl: var(--red); }
+.drive-panel a { color: var(--accent); }

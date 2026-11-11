@@ -11,6 +11,7 @@ const Drive = (() => {
   let _place = null;        // null = garage; else { name, address, lat, lon }
   let _data = null;         // data currently on screen
   let _verify = null;       // garage corridor cross-check
+  let _wx = null;           // weather cross-check for what's on screen
   let _timer = null;
   let _mapsP = null, _map = null, _marker = null;
 
@@ -126,6 +127,61 @@ const Drive = (() => {
       </div>`).join('')}${closed}</div>`;
   }
 
+  // ── Weather: measured station vs forecast model vs Google ──
+  const fmtV = (v, unit) => (v == null || v === '' ? '<span class="muted">—</span>' : `${escHtml(String(typeof v === 'number' ? Math.round(v) : v))}${unit}`);
+  function wxHtml() {
+    if (!_wx) return '<div class="drive-panel-note">Checking weather sources…</div>';
+    if (_wx.error) return `<div class="drive-problem">⚠️ Weather check failed (${escHtml(_wx.error)}) <button type="button" class="btn btn-ghost btn-sm" onclick="Drive.loadWx()">Retry</button></div>`;
+    const st = _wx.station;
+    const gNote = _wx.googleError
+      ? `<div class="drive-panel-note">Google Weather: ${escHtml(_wx.googleError)}${/not enabled/.test(_wx.googleError) ? ' — turn on “Weather API” in Google Cloud and allow it on your server key.' : ''}</div>` : '';
+    return `
+      <div class="drive-panel-note">${st
+        ? `Measured at <strong>${escHtml(st.name)}</strong> (${escHtml(st.id)}), ${st.miles} mi away, ${st.ageMin} min ago ·
+           <a href="${escHtml(st.url)}" target="_blank" rel="noopener">verify on weather.gov ↗</a>`
+        : 'No weather station report nearby — the tiles are using the forecast model.'}</div>
+      ${gNote}
+      <div class="table-wrap"><table class="drive-table">
+        <thead><tr><th>Reading</th><th>Station<br><span class="muted small">measured</span></th><th>Forecast<br><span class="muted small">model</span></th><th>Google</th><th>Result</th></tr></thead>
+        <tbody>${_wx.rows.map(r => `<tr>
+          <td><strong>${escHtml(r.label)}</strong></td>
+          <td>${fmtV(r.station, r.unit)}</td><td>${fmtV(r.model, r.unit)}</td><td>${fmtV(r.google, r.unit)}</td>
+          <td>${r.agree === true ? `<span class="v-ok">✅ ${escHtml(r.text)}</span>` : r.agree === false ? `<span class="v-diff">⚠️ ${escHtml(r.text)}</span>` : `<span class="muted">${escHtml(r.text)}</span>`}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  }
+
+  async function loadWx() {
+    _wx = null;
+    const el = () => document.getElementById('drive-wx');
+    if (el()) el().innerHTML = wxHtml();
+    try {
+      _wx = await API.get(_place ? `/api/conditions/weather-check?lat=${_place.lat}&lon=${_place.lon}` : '/api/conditions/weather-check');
+    } catch (e) { _wx = { error: errText(e) }; }
+    if (el()) el().innerHTML = wxHtml();
+  }
+
+  // ── Flooding: NOAA tide gauge + alerts + rain ──
+  function floodHtml(d) {
+    const t = d.tide, tz = { hour: 'numeric', minute: '2-digit' };
+    const floodAlerts = d.alerts.filter(a => /flood/i.test(a.event));
+    const meter = ft => {
+      // 0 ft below = at flood level; show up to 3 ft of headroom.
+      const pctFull = Math.max(0, Math.min(100, 100 - (ft / 3) * 100));
+      const lvl = ft <= 0 ? 'poor' : ft <= 0.3 ? 'fair' : 'good';
+      return `<div class="drive-meter lvl-${lvl}"><span style="width:${pctFull}%"></span></div>`;
+    };
+    return `
+      ${t ? `
+        <div class="drive-flood-row"><div><strong>Water now</strong> · ${t.belowMinorFt > 0 ? `${t.belowMinorFt} ft below` : `${Math.abs(t.belowMinorFt)} ft above`} flood level</div>${meter(t.belowMinorFt)}</div>
+        ${t.nextHigh ? `<div class="drive-flood-row"><div><strong>Next high tide</strong> ${escHtml(new Date(t.nextHigh.time).toLocaleTimeString([], tz))} · ${t.nextHigh.belowMinorFt > 0 ? `${t.nextHigh.belowMinorFt} ft below` : `${Math.abs(t.nextHigh.belowMinorFt)} ft above`} flood level</div>${meter(t.nextHigh.belowMinorFt)}</div>` : ''}
+        <div class="drive-panel-note">NOAA tide gauge at <strong>${escHtml(t.name)}</strong>, ${t.miles} mi away, read ${escHtml(new Date(t.time).toLocaleTimeString([], tz))} ·
+          <a href="${escHtml(t.url)}" target="_blank" rel="noopener">verify on NOAA ↗</a></div>`
+      : '<div class="drive-panel-note">No tide gauge within 30 miles (inland) — flooding is judged from rain and official alerts.</div>'}
+      <div class="drive-flood-row"><div><strong>Flood alerts</strong> · ${floodAlerts.length ? floodAlerts.map(a => escHtml(a.event)).join(', ') : 'none from the National Weather Service'}</div></div>
+      ${d.rain ? `<div class="drive-flood-row"><div><strong>Rain</strong> · ${d.rain.chance3h}% chance next 3h · ${d.rain.next6In}" expected next 6h${d.station?.rainLastHourIn ? ` · ${d.station.rainLastHourIn}" fell last hour` : ''}</div></div>` : ''}`;
+  }
+
   // ── Google map with live traffic ──
   function loadMaps(key) {
     if (window.google?.maps?.Map) return Promise.resolve();
@@ -208,6 +264,16 @@ const Drive = (() => {
           <div id="drive-map" class="drive-map"></div>
         </div>
       </div>
+      <div class="drive-grid">
+        <div class="drive-panel">
+          <div class="drive-panel-title">Weather check · measured vs forecast vs Google</div>
+          <div id="drive-wx">${wxHtml()}</div>
+        </div>
+        <div class="drive-panel">
+          <div class="drive-panel-title">Flooding · tide, alerts & rain</div>
+          ${floodHtml(d)}
+        </div>
+      </div>
       ${incidentsHtml(d)}`;
     if (lat != null) showMap(lat, lon, _place ? 13 : 11);
   }
@@ -227,6 +293,7 @@ const Drive = (() => {
       if (!_place) _garage = _data;
       render();
       if (!_place && _cfg?.googleVerify) reverify(true);
+      loadWx();
     } catch (e) {
       if (_data) render(errText(e));
       else body.innerHTML = `<div class="drive-cond-loading drive-cond-error">⚠️ ${escHtml(errText(e))}
@@ -320,7 +387,7 @@ const Drive = (() => {
   }
 
   return {
-    load, reload, reverify, search, garage, summaryBar,
+    load, reload, reverify, loadWx, search, garage, summaryBar,
     pick: i => { document.getElementById('drive-results').innerHTML = ''; select(Drive._results[i]); },
     pickRecent: i => select(recent()[i]),
     _results: [],

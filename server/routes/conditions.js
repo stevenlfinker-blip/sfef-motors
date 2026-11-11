@@ -9,6 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const google = require('../google-traffic');
+const sources = require('../weather-sources');
 
 const LAT = Number(process.env.GARAGE_LAT || 25.9);
 const LON = Number(process.env.GARAGE_LON || -80.17);
@@ -122,56 +123,69 @@ function weatherText(code) {
 }
 const isRain = c => (c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95;
 
-function rateWeather(cur, hourly, alerts) {
+// `obs` is the nearest weather station's measured report (null if none);
+// `cur` is the forecast model's current values with measured ones laid over.
+const measuredAt = obs => (obs ? `measured at ${obs.name} ${obs.ageMin} min ago` : 'forecast model (no station report)');
+const STATION_RAIN = /rain|shower|drizzle|thunder|storm/i;
+
+function rateWeather({ cur, hourly, alerts, obs }) {
   const code = cur.weather_code;
-  const next3 = hourly.precipitation_probability.slice(0, 3);
-  const rainChance = Math.max(0, ...next3);
+  const rainChance = Math.max(0, ...hourly.precipitation_probability.slice(0, 3));
   const stormSoon = hourly.weather_code.slice(0, 3).some(c => c >= 95);
   const tropical = alerts.find(a => /hurricane|tropical storm|tornado|severe thunderstorm/i.test(a.event));
+  const stationStorm = obs && /thunder/i.test(obs.text), stationRain = obs && STATION_RAIN.test(obs.text);
+  const heavy = obs && /heavy/i.test(obs.text);
   let level = 'good';
-  if (tropical || code >= 95 || code === 65 || code === 82 || (stormSoon && rainChance >= 50)) level = 'poor';
-  else if (isRain(code) || code === 45 || code === 48 || rainChance >= 40 || cur.wind_gusts_10m >= 30) level = 'fair';
+  if (tropical || stationStorm || heavy || code >= 95 || code === 65 || code === 82 || (stormSoon && rainChance >= 50)) level = 'poor';
+  else if (stationRain || isRain(code) || code === 45 || code === 48 || rainChance >= 40 || cur.wind_gusts_10m >= 30) level = 'fair';
   if (cur.wind_gusts_10m >= 45) level = 'poor';
   const bits = [`${rainChance}% rain chance next 3h`];
   if (cur.wind_gusts_10m >= 25) bits.push(`gusts ${Math.round(cur.wind_gusts_10m)} mph`);
+  if (obs?.rainLastHourIn) bits.push(`${obs.rainLastHourIn}" rain last hour`);
   if (tropical) bits.unshift(tropical.event);
-  return { key: 'weather', label: 'Weather', level, value: weatherText(code), detail: bits.join(' · ') };
+  return { key: 'weather', label: 'Weather', level, value: obs?.text || weatherText(code), detail: bits.join(' · ') };
 }
 
-function rateFlooding(cur, hourly, alerts) {
+function rateFlooding({ cur, hourly, alerts, obs, tide }) {
   const flood = alerts.filter(a => /flood/i.test(a.event));
   const warn = flood.find(a => /warning/i.test(a.event));
   const next6 = hourly.precipitation.slice(0, 6).reduce((s, v) => s + (v || 0), 0);
+  const rainNow = Math.max(cur.precipitation || 0, obs?.rainLastHourIn || 0);
   let level = 'good', value = 'No flood alerts', detail = 'Roads should be clear';
   if (warn) { level = 'poor'; value = warn.event; detail = 'Avoid low-lying streets'; }
+  else if (tide && tide.belowMinorFt <= 0) { level = 'poor'; value = 'Tide at flood level'; detail = 'Coastal streets may be under water'; }
   else if (flood.length) { level = 'fair'; value = flood[0].event; detail = 'Watch for standing water'; }
-  else if (cur.precipitation >= 0.25 || next6 >= 1) {
+  else if (tide?.nextHigh && tide.nextHigh.belowMinorFt <= 0.3) {
+    level = 'fair'; value = 'High tide near flood level';
+    detail = `Low coastal streets may flood around ${new Date(tide.nextHigh.time).toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })}`;
+  } else if (rainNow >= 0.25 || next6 >= 1) {
     level = 'fair'; value = 'Street flooding possible';
     detail = `${next6.toFixed(1)}" rain expected next 6h`;
   } else if (next6 >= 0.3) {
     detail = `${next6.toFixed(1)}" rain expected next 6h`;
   }
+  if (tide && level === 'good') detail += ` · tide ${tide.belowMinorFt} ft below flood level`;
   return { key: 'flooding', label: 'Flooding', level, value, detail };
 }
 
-function rateHeat(cur, alerts) {
+function rateHeat({ cur, alerts, obs }) {
   const feels = Math.round(cur.apparent_temperature);
   const heatAlert = alerts.find(a => /heat/i.test(a.event));
   let level = 'good';
   if (feels >= 105 || (heatAlert && /warning/i.test(heatAlert.event))) level = 'poor';
   else if (feels >= 95 || heatAlert || cur.temperature_2m < 45) level = 'fair';
-  const detail = heatAlert ? heatAlert.event
+  const feel = heatAlert ? heatAlert.event
     : feels >= 95 ? 'Hard on engines, tires and people'
     : cur.temperature_2m < 45 ? 'Cold — let the engine warm up' : 'Comfortable';
-  return { key: 'heat', label: 'Heat', level, value: `${Math.round(cur.temperature_2m)}°F · feels ${feels}°`, detail };
+  return { key: 'heat', label: 'Heat', level, value: `${Math.round(cur.temperature_2m)}°F · feels ${feels}°`, detail: `${feel} · ${measuredAt(obs)}` };
 }
 
-function rateHumidity(cur) {
+function rateHumidity({ cur, obs }) {
   const dew = Math.round(cur.dew_point_2m);
   const level = dew >= 75 ? 'poor' : dew >= 69 ? 'fair' : 'good';
-  const detail = level === 'poor' ? 'Muggy — windows fog, A/C works hard'
+  const feel = level === 'poor' ? 'Muggy — windows fog, A/C works hard'
     : level === 'fair' ? 'Sticky' : 'Dry and comfortable';
-  return { key: 'humidity', label: 'Humidity', level, value: `${Math.round(cur.relative_humidity_2m)}% · dew pt ${dew}°`, detail };
+  return { key: 'humidity', label: 'Humidity', level, value: `${Math.round(cur.relative_humidity_2m)}% · dew pt ${dew}°`, detail: `${feel} · ${measuredAt(obs)}` };
 }
 
 // No TomTom key: typical Miami weekday rush hours.
@@ -278,26 +292,38 @@ async function pointTraffic(lat, lon, warnings) {
 
 async function fetchWeather(lat, lon, warnings) {
   const om = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
-    + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,wind_gusts_10m'
+    + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m'
     + '&hourly=precipitation_probability,precipitation,weather_code&forecast_hours=6'
     + `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=${encodeURIComponent(TZ)}`;
-  const [wx, nws] = await Promise.all([
+  const [wx, nws, obs, tide] = await Promise.all([
     getJson(om),
     getJson(`https://api.weather.gov/alerts/active?point=${lat.toFixed(4)},${lon.toFixed(4)}`, {
       'User-Agent': 'SFEF-Motors garage dashboard', Accept: 'application/geo+json',
     }).catch(e => { warnings.push(`Flood/heat alerts unavailable (${e.message})`); return null; }),
+    sources.observation(lat, lon).catch(e => { warnings.push(`Live weather station unavailable (${e.message}) — using the forecast model`); return null; }),
+    sources.tide(lat, lon).catch(e => { warnings.push(`Tide gauge unavailable (${e.message})`); return null; }),
   ]);
   const alerts = (nws?.features || []).map(f => ({ event: f.properties.event, headline: f.properties.headline }));
-  return { cur: wx.current, hourly: wx.hourly, alerts };
+  // Measured readings win over the model wherever the station reported them.
+  const cur = { ...wx.current };
+  if (obs) {
+    if (obs.tempF != null) cur.temperature_2m = obs.tempF;
+    if (obs.feelsF != null) cur.apparent_temperature = obs.feelsF;
+    if (obs.humidity != null) cur.relative_humidity_2m = obs.humidity;
+    if (obs.dewF != null) cur.dew_point_2m = obs.dewF;
+    if (obs.gustMph != null) cur.wind_gusts_10m = obs.gustMph;
+  }
+  return { cur, model: wx.current, hourly: wx.hourly, alerts, obs, tide };
 }
 
 // Turns weather + traffic into the five factors, a verdict and the collectables call.
-function summarize({ place, lat, lon }, { cur, hourly, alerts }, traffic, warnings) {
+function summarize({ place, lat, lon }, wx, traffic, warnings) {
+  const { cur, hourly, alerts } = wx;
   const factors = [
-    rateWeather(cur, hourly, alerts),
-    rateFlooding(cur, hourly, alerts),
-    rateHeat(cur, alerts),
-    rateHumidity(cur),
+    rateWeather(wx),
+    rateFlooding(wx),
+    rateHeat(wx),
+    rateHumidity(wx),
     traffic,
   ];
   const by = Object.fromEntries(factors.map(f => [f.key, f]));
@@ -327,6 +353,17 @@ function summarize({ place, lat, lon }, { cur, hourly, alerts }, traffic, warnin
     alerts,
     warnings,
     lat, lon,
+    station: wx.obs, tide: wx.tide,
+    rain: {
+      next6In: Math.round(hourly.precipitation.slice(0, 6).reduce((a, v) => a + (v || 0), 0) * 10) / 10,
+      chance3h: Math.max(0, ...hourly.precipitation_probability.slice(0, 3)),
+    },
+    model: {
+      tempF: Math.round(wx.model.temperature_2m * 10) / 10, feelsF: Math.round(wx.model.apparent_temperature * 10) / 10,
+      humidity: wx.model.relative_humidity_2m, dewF: Math.round(wx.model.dew_point_2m * 10) / 10,
+      windMph: Math.round(wx.model.wind_speed_10m * 10) / 10, gustMph: Math.round(wx.model.wind_gusts_10m * 10) / 10,
+      text: weatherText(wx.model.weather_code),
+    },
   };
 }
 
@@ -445,6 +482,44 @@ async function verifyPoint(flow) {
   };
 }
 
+// ── Weather cross-check: measured station vs forecast model vs Google ──
+// Tolerances are about what a driver would notice.
+const WX_ROWS = [
+  ['Temperature', 'tempF', 3, '°F'], ['Feels like', 'feelsF', 4, '°F'], ['Humidity', 'humidity', 10, '%'],
+  ['Dew point', 'dewF', 3, '°F'], ['Wind', 'windMph', 7, ' mph'],
+];
+const _wxCheck = new Map(); // "lat,lon" → { at, data }
+
+async function weatherCheck(base) {
+  const key = `${base.lat.toFixed(3)},${base.lon.toFixed(3)}`;
+  const hit = _wxCheck.get(key);
+  if (hit && Date.now() - hit.at < VERIFY_TTL) return hit.data;
+  let g = null, gError = null;
+  try { g = await sources.googleWeather(base.lat, base.lon); } catch (e) { gError = e.message; }
+  const st = base.station, m = base.model;
+  const rows = WX_ROWS.map(([label, k, tol, unit]) => {
+    const ref = st?.[k] ?? null, mv = m?.[k] ?? null, gv = g?.[k] ?? null;
+    const off = [];
+    const anchor = ref ?? mv; // judge against the measurement when there is one
+    if (anchor != null) {
+      if (ref != null && mv != null && Math.abs(mv - ref) > tol) off.push('Forecast model');
+      if (gv != null && Math.abs(gv - anchor) > tol) off.push('Google');
+    }
+    const compared = [ref, mv, gv].filter(v => v != null).length;
+    const text = compared < 2 ? 'Not enough readings' : off.length ? `${off.join(' & ')} differ${off.length > 1 ? '' : 's'}`
+      : compared === 3 ? 'All three agree' : 'Readings agree';
+    return { label, unit, station: ref, model: mv, google: gv, agree: compared < 2 ? null : !off.length, text };
+  });
+  rows.push({ label: 'Sky', unit: '', station: st?.text || null, model: m?.text || null, google: g?.text || null, agree: null, text: '' });
+  const data = {
+    checkedAt: new Date().toISOString(),
+    station: st ? { id: st.station, name: st.name, miles: st.miles, ageMin: st.ageMin, url: st.url } : null,
+    googleError: gError, rows, tide: base.tide,
+  };
+  if (g) _wxCheck.set(key, { at: Date.now(), data }); // retry Google next time if it failed
+  return data;
+}
+
 // ── Routes ────────────────────────────────────────
 router.get('/', async (req, res) => {
   if (!_cache) await refresh(); // first request right after a restart
@@ -473,6 +548,18 @@ router.get('/config', (req, res) => res.json({
 router.get('/verify', async (req, res) => {
   if (!google.enabled()) return res.json({ disabled: true });
   try { res.json(await verifyGarage()); } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+// Weather cross-check for the garage (no lat/lon) or a searched place.
+router.get('/weather-check', async (req, res) => {
+  let base = _cache?.data;
+  if (req.query.lat) {
+    const k = `${Number(req.query.lat).toFixed(3)},${Number(req.query.lon).toFixed(3)}`;
+    base = _searchCache.get(k)?.data;
+    if (!base) return res.status(404).json({ error: 'Search the place again first' });
+  }
+  if (!base) return res.status(502).json({ error: 'No conditions yet' });
+  try { res.json(await weatherCheck(base)); } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
 // Place search → up to 5 matches (Florida-biased, US only).

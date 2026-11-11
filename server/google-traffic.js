@@ -49,4 +49,4 @@ async function routeRatio(from, to) {
   };
 }
 
-module.exports = { enabled, routeRatio, usage };
+module.exports = { enabled, routeRatio, usage, take: _take };
