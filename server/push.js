@@ -97,4 +97,15 @@ function pushUsers(users, payload) {
   }
 }
 
-module.exports = { publicKey: KEYS.publicKey, saveSubscription, removeSubscription, sendToUser, pushUsers };
+// Called by the service worker when a notification lands on the device.
+function markReceived(userId, sid, error = '') {
+  db.prepare('UPDATE push_subscriptions SET last_received_at = ?, last_device_error = ? WHERE id = ? AND user_id = ?')
+    .run(new Date().toISOString(), String(error).slice(0, 200), sid, userId);
+}
+
+function listDevices(userId) {
+  return db.prepare(`SELECT id, user_agent, created_at, last_sent_at, last_result, last_received_at, last_device_error
+    FROM push_subscriptions WHERE user_id = ? ORDER BY id`).all(userId);
+}
+
+module.exports = { publicKey: KEYS.publicKey, saveSubscription, removeSubscription, sendToUser, pushUsers, markReceived, listDevices };
