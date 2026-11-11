@@ -231,8 +231,10 @@ async function incidentsNear(lat, lon, km = 5) {
       delayMin: p.delay ? Math.round(p.delay / 60) : 0,
       text: p.events?.[0]?.description || null,
     };
-  }).sort((a, b) => b.severity - a.severity || b.delayMin - a.delayMin);
+  }).sort((a, b) => b.delayMin - a.delayMin || (b.type === 'Accident') - (a.type === 'Accident') || b.severity - a.severity);
 }
+// Long-running side-street closures (no delay) are common and mostly noise.
+const isQuietClosure = i => i.type === 'Road closed' && !i.delayMin;
 
 // Traffic at a searched place: the nearest road's live speed, plus incidents nearby.
 async function pointTraffic(lat, lon, warnings) {
@@ -241,12 +243,13 @@ async function pointTraffic(lat, lon, warnings) {
     incidentsNear(lat, lon).catch(e => { warnings.push(`Traffic incidents unavailable (${e.message})`); return []; }),
   ]);
   let level = trafficLevel(flow.ratio);
-  const serious = incidents.filter(i => i.severity >= 3 || i.type === 'Road closed' || i.type === 'Accident');
-  if (level === 'good' && serious.length) level = 'fair';
+  const active = incidents.filter(i => !isQuietClosure(i));
+  const closures = incidents.length - active.length;
+  if (level === 'good' && active.some(i => i.type === 'Accident' || i.delayMin >= 5)) level = 'fair';
   const value = flow.closed ? 'Road closed' : level === 'good' ? 'Flowing' : level === 'fair' ? 'Slow' : 'Heavy';
   const detail = `Nearest road ${Math.round(flow.speed)} mph (usually ${Math.round(flow.free)})`
-    + (incidents.length ? ` · ${incidents.length} incident${incidents.length > 1 ? 's' : ''} within 3 mi` : '') + ' · TomTom';
-  return { key: 'traffic', label: 'Traffic', level, value, detail, live: true, flow, incidents: incidents.slice(0, 8) };
+    + (active.length ? ` · ${active.length} slowdown${active.length > 1 ? 's' : ''}/accident${active.length > 1 ? 's' : ''} nearby` : '') + ' · TomTom';
+  return { key: 'traffic', label: 'Traffic', level, value, detail, live: true, flow, incidents: active.slice(0, 8), closures };
 }
 
 async function fetchWeather(lat, lon, warnings) {

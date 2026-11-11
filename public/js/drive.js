@@ -115,14 +115,15 @@ const Drive = (() => {
   }
 
   function incidentsHtml(d) {
-    const list = d.factors.find(f => f.key === 'traffic')?.incidents;
+    const t = d.factors.find(f => f.key === 'traffic'), list = t?.incidents;
     if (!list) return '';
-    if (!list.length) return `<div class="drive-panel"><div class="drive-panel-title">Incidents within 3 miles</div><div class="drive-panel-note">None reported right now.</div></div>`;
-    return `<div class="drive-panel"><div class="drive-panel-title">Incidents within 3 miles · TomTom</div>
+    const closed = t.closures ? `<div class="drive-panel-note" style="margin:8px 0 0">Plus ${t.closures} street closure${t.closures > 1 ? 's' : ''} with no delay reported (roadwork, events).</div>` : '';
+    if (!list.length) return `<div class="drive-panel"><div class="drive-panel-title">Slowdowns & accidents within 3 miles</div><div class="drive-panel-note" style="margin:0">None reported right now.</div>${closed}</div>`;
+    return `<div class="drive-panel"><div class="drive-panel-title">Slowdowns & accidents within 3 miles · TomTom</div>
       ${list.map(i => `<div class="drive-incident sev-${Math.min(i.severity, 4)}">
         <strong>${escHtml(i.type)}</strong>${i.road ? ` · ${escHtml(i.road)}` : ''}${i.delayMin ? ` · +${i.delayMin} min` : ''}
         <div class="muted small">${escHtml([i.from && i.to ? `${i.from} → ${i.to}` : i.from || i.to, i.text].filter(Boolean).join(' · '))}</div>
-      </div>`).join('')}</div>`;
+      </div>`).join('')}${closed}</div>`;
   }
 
   // ── Google map with live traffic ──
