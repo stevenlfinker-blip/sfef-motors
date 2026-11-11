@@ -140,6 +140,7 @@ const Dashboard = (() => {
           <span id="hud-date" class="hud-date">--.--.----</span>
         </div>
       </div>
+      <div id="drive-conditions" class="drive-cond drive-cond-loading">Checking driving conditions…</div>
       <div class="hud-cards">
         ${card('#facc15', 'FLEET VALUE',
           totalMarket > 0 ? fmt$(totalMarket) : fmt$(totalValue),
@@ -950,6 +951,44 @@ const Dashboard = (() => {
   }
 
   // ── Main load ─────────────────────────────────────
+  // ── Ideal driving conditions (top of dashboard) ──
+  const COND_ICONS = { weather: '☁️', flooding: '🌊', heat: '🌡️', humidity: '💧', traffic: '🚗' };
+  const COND_WORD = { good: 'GOOD', fair: 'FAIR', poor: 'POOR' };
+
+  function conditionsHtml(d) {
+    const time = new Date(d.updatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const tiles = d.factors.map(f => `
+      <div class="drive-tile lvl-${f.level}">
+        <div class="drive-tile-top"><span>${COND_ICONS[f.key] || ''} ${escHtml(f.label)}</span><span class="drive-pill">${COND_WORD[f.level]}</span></div>
+        <div class="drive-tile-value">${escHtml(f.value)}</div>
+        <div class="drive-tile-detail">${escHtml(f.detail)}${f.key === 'traffic' && f.live ? ' · live' : ''}</div>
+      </div>`).join('');
+    const alerts = d.alerts.length ? `<div class="drive-alerts">⚠️ ${d.alerts.map(a => escHtml(a.event)).join(' · ')}</div>` : '';
+    return `
+      <div class="drive-verdict lvl-${d.overall.level}">
+        <div class="drive-kicker">DRIVING CONDITIONS · ${escHtml(d.place.toUpperCase())}</div>
+        <div class="drive-headline">${escHtml(d.overall.headline)}</div>
+        <div class="drive-detail">${escHtml(d.overall.detail)}</div>
+        <div class="drive-collect ${d.collectables.ok ? 'ok' : 'no'}">${d.collectables.ok ? '⭐' : '🏠'} ${escHtml(d.collectables.text)}</div>
+        <div class="drive-updated">Updated ${escHtml(time)}${d.stale ? ' · offline, showing last check' : ''}</div>
+      </div>
+      <div class="drive-tiles">${tiles}</div>
+      ${alerts}`;
+  }
+
+  async function loadConditions() {
+    const el = document.getElementById('drive-conditions');
+    if (!el) return;
+    try {
+      const d = await API.get('/api/conditions');
+      el.className = 'drive-cond';
+      el.innerHTML = conditionsHtml(d);
+    } catch (_) {
+      el.className = 'drive-cond drive-cond-loading';
+      el.textContent = 'Driving conditions unavailable right now';
+    }
+  }
+
   async function load() {
     const el = document.getElementById('dashboard-content');
     try {
@@ -986,6 +1025,7 @@ const Dashboard = (() => {
         '<div class="dash-full">' + pendingMaintWidget(maint) + '</div>';
       startHudClock();
       _initMktChart();
+      loadConditions(); // separate request so slow weather never holds up the dashboard
     } catch (err) {
       if (err.message === 'Session expired') return;
       el.innerHTML = `<div style="color:var(--red);padding:20px">Failed to load dashboard: ${escHtml(err.message)}<br>

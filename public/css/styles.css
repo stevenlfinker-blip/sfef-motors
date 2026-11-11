@@ -1043,3 +1043,67 @@ th.sortable:hover { color: var(--accent); }
 /* Checkbox labels in pop-ups read as sentences, not all-caps headings */
 #modal-body label.checkbox-row { text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; color: var(--text); }
 .push-share-icon { width: 14px; height: 14px; vertical-align: -2px; }
+
+/* ── Ideal driving conditions strip (dashboard top) ── */
+.drive-cond {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.1fr) 3fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.drive-cond-loading {
+  display: block;
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: .5px;
+}
+.drive-cond .lvl-good { --lvl: var(--green); --lvl-dim: var(--green-dim); }
+.drive-cond .lvl-fair { --lvl: var(--orange); --lvl-dim: var(--orange-dim); }
+.drive-cond .lvl-poor { --lvl: var(--red); --lvl-dim: var(--red-dim); }
+.drive-verdict {
+  background: linear-gradient(135deg, var(--lvl-dim) 0%, var(--card) 70%);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--lvl);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.drive-kicker { font-size: 9px; letter-spacing: 2px; color: var(--text-muted); font-weight: 700; }
+.drive-headline { font-size: 20px; font-weight: 700; color: var(--lvl); line-height: 1.2; }
+.drive-detail { font-size: 12px; color: var(--text); }
+.drive-collect { font-size: 12px; margin-top: 6px; padding: 6px 8px; background: var(--elevated); border-radius: 4px; }
+.drive-collect.ok { color: var(--green); }
+.drive-collect.no { color: var(--orange); }
+.drive-updated { font-size: 10px; color: var(--text-muted); margin-top: auto; padding-top: 6px; }
+.drive-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+.drive-tile {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--lvl);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.drive-tile-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); }
+.drive-pill { font-size: 9px; letter-spacing: 1px; padding: 2px 6px; border-radius: 3px; color: var(--lvl); background: var(--lvl-dim); }
+.drive-tile-value { font-size: 15px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.drive-tile-detail { font-size: 11px; color: var(--text-muted); line-height: 1.35; }
+.drive-alerts { grid-column: 1 / -1; padding: 8px 12px; background: var(--red-dim); border: 1px solid var(--red); color: var(--red); font-size: 12px; }
+@media (max-width: 1200px) {
+  .drive-cond { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  .drive-tiles { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .drive-tile:last-child { grid-column: 1 / -1; }
+  .drive-headline { font-size: 18px; }
+}
