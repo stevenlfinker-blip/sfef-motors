@@ -19,7 +19,7 @@ const RETRY_MS = 5 * 60 * 1000;     // after a failed update
 const STALE_MS = 20 * 60 * 1000;    // older than this = flagged out of date
 const TOMTOM_DAILY_CAP = Number(process.env.TOMTOM_DAILY_CAP || 2450); // free tier: 2,500/day
 const SEARCH_TTL = 10 * 60 * 1000;
-const VERIFY_TTL = 15 * 60 * 1000;
+const VERIFY_TTL = 30 * 60 * 1000; // 6 TomTom + 6 Google routes per check
 
 // Live traffic check points (~25 mile area), grouped into corridors.
 // Positions come from OpenStreetMap road geometry (2026-11-11); the I-95 point
@@ -363,26 +363,48 @@ function compare(tomtomRatio, googleRatio) {
 }
 const pct = r => Math.round(r * 100);
 
+// TomTom's own drive time over the same stretch Google drives, so the two are
+// compared like for like (whole-trip time vs whole-trip time).
+async function tomtomRoute(from, to) {
+  const d = await tomtom(`/routing/1/calculateRoute/${from.join(',')}:${to.join(',')}/json`, {
+    traffic: true, travelMode: 'car', routeType: 'fastest', computeTravelTimeFor: 'all',
+  });
+  const sum = d.routes?.[0]?.summary;
+  if (!sum) throw new Error('TomTom found no route');
+  const t = sum.travelTimeInSeconds, normal = sum.noTrafficTravelTimeInSeconds || t;
+  return { ratio: t > 0 ? Math.min(1, normal / t) : 1, minutes: Math.round(t / 6) / 10, normalMinutes: Math.round(normal / 6) / 10 };
+}
+
 async function verifyGarage() {
   if (_verify && Date.now() - _verify.at < VERIFY_TTL) return _verify.data;
-  const corridors = _cache?.data?.factors?.find(f => f.key === 'traffic')?.corridors || [];
+  const spots = _cache?.data?.factors?.find(f => f.key === 'traffic')?.corridors || [];
+  const avg = xs => xs.reduce((s, x) => s + x.ratio, 0) / xs.length;
   const rows = await Promise.all(CORRIDORS.map(async c => {
-    const tt = corridors.find(x => x.name === c.name);
-    try {
-      const legs = await Promise.all(c.google.map(([label, from, to]) => google.routeRatio(from, to).then(r => ({ label, ...r }))));
-      const gRatio = legs.reduce((s, l) => s + l.ratio, 0) / legs.length;
-      return {
-        name: c.name,
-        tomtom: tt ? { level: tt.level, flowPct: pct(tt.ratio), speed: tt.speed } : null,
-        google: { level: trafficLevel(gRatio), flowPct: pct(gRatio), legs },
-        ...(tt ? compare(tt.ratio, gRatio) : { agree: null, text: 'No TomTom data to compare' }),
-      };
-    } catch (e) {
-      return { name: c.name, tomtom: tt ? { level: tt.level, flowPct: pct(tt.ratio), speed: tt.speed } : null, google: null, agree: null, text: `Google check failed (${e.message})` };
+    const spot = spots.find(x => x.name === c.name);
+    const legs = await Promise.all(c.google.map(async ([label, from, to]) => {
+      const [t, g] = await Promise.all([
+        tomtomRoute(from, to).catch(e => ({ error: e.message })),
+        google.routeRatio(from, to).catch(e => ({ error: e.message })),
+      ]);
+      return { label, tomtom: t, google: g };
+    }));
+    const tLegs = legs.map(l => l.tomtom).filter(x => !x.error), gLegs = legs.map(l => l.google).filter(x => !x.error);
+    const row = {
+      name: c.name,
+      spotSpeed: spot ? spot.speed : null,
+      legs,
+      tomtom: tLegs.length ? { level: trafficLevel(avg(tLegs)), flowPct: pct(avg(tLegs)) } : null,
+      google: gLegs.length ? { level: trafficLevel(avg(gLegs)), flowPct: pct(avg(gLegs)) } : null,
+    };
+    if (row.tomtom && row.google) Object.assign(row, compare(avg(tLegs), avg(gLegs)));
+    else {
+      const err = legs.map(l => l.google.error ? `Google: ${l.google.error}` : l.tomtom.error ? `TomTom: ${l.tomtom.error}` : '').find(Boolean);
+      Object.assign(row, { agree: null, text: `Check failed (${err || 'no data'})` });
     }
+    return row;
   }));
   const data = { checkedAt: new Date().toISOString(), rows };
-  if (rows.some(r => r.google)) _verify = { at: Date.now(), data }; // don't cache a total failure
+  if (rows.some(r => r.agree !== null)) _verify = { at: Date.now(), data }; // don't cache a total failure
   return data;
 }
 

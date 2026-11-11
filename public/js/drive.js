@@ -74,7 +74,7 @@ const Drive = (() => {
 
   function verifyIntro() {
     return `<div class="drive-panel-note">“% of normal speed” = how fast traffic is moving compared with an empty road (100% = no delays).
-      TomTom measures it from live speeds; Google from its drive time with and without traffic over the same stretch.</div>`;
+      Both services time the same drive with and without today's traffic.</div>`;
   }
 
   function garageVerifyHtml() {
@@ -87,9 +87,9 @@ const Drive = (() => {
       <div class="table-wrap"><table class="drive-table">
         <thead><tr><th>Route</th><th>TomTom</th><th>Google</th><th>Result</th></tr></thead>
         <tbody>${_verify.rows.map(r => `<tr>
-          <td><strong>${escHtml(r.name)}</strong>${r.google?.legs ? `<div class="muted small">${r.google.legs.map(l => `${escHtml(l.label)}: ${l.minutes} min (normally ${l.normalMinutes})`).join('<br>')}</div>` : ''}</td>
-          <td>${lvlCell(r.tomtom, r.tomtom ? ` · ${r.tomtom.speed} mph` : '')}</td>
-          <td>${lvlCell(r.google)}</td>
+          <td><strong>${escHtml(r.name)}</strong>${r.legs.map(l => `<div class="muted small">${escHtml(l.label)}</div>`).join('')}</td>
+          <td>${lvlCell(r.tomtom)}${r.legs.map(l => `<div class="muted small">${l.tomtom.error ? '—' : `${l.tomtom.minutes} min (normally ${l.tomtom.normalMinutes})`}</div>`).join('')}</td>
+          <td>${lvlCell(r.google)}${r.legs.map(l => `<div class="muted small">${l.google.error ? '—' : `${l.google.minutes} min (normally ${l.google.normalMinutes})`}</div>`).join('')}</td>
           <td>${verdictCell(r)}</td></tr>`).join('')}</tbody>
       </table></div>`;
   }
