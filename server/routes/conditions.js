@@ -13,7 +13,9 @@ const LAT = Number(process.env.GARAGE_LAT || 25.9);
 const LON = Number(process.env.GARAGE_LON || -80.17);
 const PLACE = process.env.GARAGE_PLACE || 'North Miami';
 const TZ = 'America/New_York';
-const CACHE_MS = 15 * 60 * 1000;
+const REFRESH_MS = 15 * 60 * 1000; // 20 TomTom calls each → ~1,900/day (free tier: 2,500)
+const RETRY_MS = 5 * 60 * 1000;     // after a failed update
+const STALE_MS = 20 * 60 * 1000;    // older than this = flagged out of date
 
 // Live traffic check points (~25 mile area), grouped into corridors.
 // Positions come from OpenStreetMap road geometry (2026-11-11); the I-95 point
@@ -31,13 +33,16 @@ const CORRIDORS = [
   ] },
   { name: 'Collins Ave', points: [
     ['Mid-Beach', 25.81495, -80.12272], ['Surfside', 25.87805, -80.12185],
-    ['Bal Harbour', 25.88940, -80.12390], ['Sunny Isles', 25.93508, -80.12162],
+    ['Bal Harbour', 25.88940, -80.12390], ['Haulover', 25.90498, -80.12321],
+    ['Sunny Isles', 25.93508, -80.12162],
   ] },
+  { name: '163rd St', points: [['163rd St EB', 25.92582, -80.16502], ['Sunny Isles Blvd WB', 25.92651, -80.13982]] },
   { name: 'Bay Harbor', points: [['Broad Causeway', 25.88820, -80.14497]] },
   { name: 'Local', points: [['NE 125th St', 25.890, -80.189], ['Biscayne Blvd', 25.8905, -80.1635]] },
 ];
 
 let _cache = null; // { at, data }
+let _lastError = null, _nextAt = null, _inflight = null;
 
 const RANK = { good: 0, fair: 1, poor: 2 };
 const worst = (...lv) => lv.reduce((a, b) => (RANK[b] > RANK[a] ? b : a), 'good');
@@ -166,7 +171,9 @@ async function liveTraffic(key) {
   const value = level === 'good' ? 'Flowing' : level === 'fair' ? 'Slow in spots' : 'Heavy';
   const jams = corridors.filter(c => c.slowest).map(c => c.slowest);
   const detail = (jams.length ? `Slowest: ${jams.slice(0, 2).join(', ')}` : 'No major slowdowns') + ' · TomTom';
-  return { key: 'traffic', label: 'Traffic', level, value, detail, live: true, corridors };
+  const missing = results.length - ok.length;
+  return { key: 'traffic', label: 'Traffic', level, value, detail, live: true, corridors,
+    warning: missing ? `${missing} of ${results.length} traffic check points didn't respond` : null };
 }
 
 async function build() {
@@ -174,19 +181,22 @@ async function build() {
     + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,wind_gusts_10m'
     + '&hourly=precipitation_probability,precipitation,weather_code&forecast_hours=6'
     + `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=${encodeURIComponent(TZ)}`;
+  const warnings = [];
   const [wx, nws, traffic] = await Promise.all([
     getJson(om),
     getJson(`https://api.weather.gov/alerts/active?point=${LAT},${LON}`, {
       'User-Agent': 'SFEF-Motors garage dashboard', Accept: 'application/geo+json',
-    }).catch(() => null), // alerts are a bonus; never fail the whole card
+    }).catch(e => { warnings.push(`Flood/heat alerts unavailable (${e.message})`); return null; }),
     process.env.TOMTOM_API_KEY
       ? liveTraffic(process.env.TOMTOM_API_KEY.trim()).catch(e => {
           console.error('[conditions] TomTom failed:', e.message);
+          warnings.push(`Live traffic unavailable (${e.message}) — showing a time-of-day estimate`);
           const est = estimateTraffic(new Date());
-          return { ...est, detail: `Live traffic failed (${e.message}) — showing estimate` };
+          return { ...est, detail: 'Live traffic failed — showing estimate' };
         })
       : estimateTraffic(new Date()),
   ]);
+  if (traffic.warning) warnings.push(traffic.warning);
   const alerts = (nws?.features || []).map(f => ({ event: f.properties.event, headline: f.properties.headline }));
   const cur = wx.current, hourly = wx.hourly;
 
@@ -222,20 +232,46 @@ async function build() {
       : { ok: true, text: 'Good day to take a collectable out' },
     factors,
     alerts,
+    warnings,
   };
 }
 
+// Refreshes on its own every 15 minutes (whether or not anyone is looking),
+// so the dashboard always shows data at most 15 minutes old. Page loads just
+// read the latest result and never call the outside services themselves.
+async function refresh() {
+  if (_inflight) return _inflight;
+  _inflight = (async () => {
+    let wait = REFRESH_MS;
+    try {
+      const data = await build();
+      _cache = { at: Date.now(), data };
+      _lastError = null;
+    } catch (e) {
+      _lastError = e.message;
+      wait = RETRY_MS;
+      console.error('[conditions] update failed:', e.message);
+    }
+    _nextAt = Date.now() + wait;
+    setTimeout(refresh, wait).unref();
+  })().finally(() => { _inflight = null; });
+  return _inflight;
+}
+refresh();
+
 router.get('/', async (req, res) => {
-  if (_cache && Date.now() - _cache.at < CACHE_MS) return res.json(_cache.data);
-  try {
-    const data = await build();
-    _cache = { at: Date.now(), data };
-    res.json(data);
-  } catch (e) {
-    console.error('[conditions]', e.message);
-    if (_cache) return res.json({ ..._cache.data, stale: true }); // better old than nothing
-    res.status(502).json({ error: 'Weather service unavailable' });
+  if (!_cache) await refresh(); // first request right after a restart
+  if (!_cache) {
+    return res.status(502).json({ error: `Couldn't get driving conditions (${_lastError || 'no data yet'}). Trying again in 5 minutes.` });
   }
+  const age = Date.now() - _cache.at;
+  res.json({
+    ..._cache.data,
+    stale: age > STALE_MS || !!_lastError,
+    lastError: _lastError,
+    nextUpdateAt: _nextAt ? new Date(_nextAt).toISOString() : null,
+  });
 });
 
+router.refresh = refresh; // for tests
 module.exports = router;

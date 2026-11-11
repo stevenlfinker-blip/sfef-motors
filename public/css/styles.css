@@ -1111,3 +1111,6 @@ th.sortable:hover { color: var(--accent); }
 .drive-corridor { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text); }
 .drive-corridor-mph { margin-left: auto; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .drive-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lvl); flex: none; }
+.drive-problem { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 12px; background: var(--orange-dim); border: 1px solid var(--orange); color: var(--orange); font-size: 12px; line-height: 1.5; }
+.drive-problem .btn { color: var(--orange); }
+.drive-cond-error { color: var(--orange); border-color: var(--orange); }

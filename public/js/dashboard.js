@@ -955,7 +955,7 @@ const Dashboard = (() => {
   const COND_ICONS = { weather: '☁️', flooding: '🌊', heat: '🌡️', humidity: '💧', traffic: '🚗' };
   const COND_WORD = { good: 'GOOD', fair: 'FAIR', poor: 'POOR' };
 
-  function conditionsHtml(d) {
+  function conditionsHtml(d, fetchError) {
     const time = new Date(d.updatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     const tiles = d.factors.map(f => `
       <div class="drive-tile lvl-${f.level}">
@@ -966,29 +966,56 @@ const Dashboard = (() => {
         <div class="drive-tile-detail">${escHtml(f.detail)}</div>
       </div>`).join('');
     const alerts = d.alerts.length ? `<div class="drive-alerts">⚠️ ${d.alerts.map(a => escHtml(a.event)).join(' · ')}</div>` : '';
+    const next = d.nextUpdateAt ? new Date(d.nextUpdateAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
+    // Problems updating: a failed refresh, or parts of the data missing.
+    const problems = [];
+    if (fetchError) problems.push(`Couldn't reach the server (${fetchError}). Showing the last conditions from ${time}.`);
+    else if (d.stale) problems.push(`Update failed${d.lastError ? ` (${d.lastError})` : ''}. Showing conditions from ${time}${next ? ` — trying again at ${next}` : ''}.`);
+    for (const w of d.warnings || []) problems.push(w);
+    const problemHtml = problems.length ? `<div class="drive-problem">⚠️ ${problems.map(escHtml).join('<br>⚠️ ')}
+      <button type="button" class="btn btn-ghost btn-sm" onclick="Dashboard.loadConditions()">Retry</button></div>` : '';
     return `
       <div class="drive-verdict lvl-${d.overall.level}">
         <div class="drive-kicker">DRIVING CONDITIONS · ${escHtml(d.place.toUpperCase())}</div>
         <div class="drive-headline">${escHtml(d.overall.headline)}</div>
         <div class="drive-detail">${escHtml(d.overall.detail)}</div>
         <div class="drive-collect ${d.collectables.ok ? 'ok' : 'no'}">${d.collectables.ok ? '⭐' : '🏠'} ${escHtml(d.collectables.text)}</div>
-        <div class="drive-updated">Updated ${escHtml(time)}${d.stale ? ' · offline, showing last check' : ''}</div>
+        <div class="drive-updated">Updated ${escHtml(time)}${next && !d.stale && !fetchError ? ` · next update ${escHtml(next)}` : ''}</div>
       </div>
       <div class="drive-tiles">${tiles}</div>
-      ${alerts}`;
+      ${alerts}${problemHtml}`;
   }
+
+  let _cond = null;       // last good response, kept on screen if an update fails
+  let _condTimer = null;
 
   async function loadConditions() {
     const el = document.getElementById('drive-conditions');
     if (!el) return;
     try {
-      const d = await API.get('/api/conditions');
+      _cond = await API.get('/api/conditions');
       el.className = 'drive-cond';
-      el.innerHTML = conditionsHtml(d);
-    } catch (_) {
-      el.className = 'drive-cond drive-cond-loading';
-      el.textContent = 'Driving conditions unavailable right now';
+      el.innerHTML = conditionsHtml(_cond);
+    } catch (e) {
+      let msg = e.message || 'network error';
+      try { msg = JSON.parse(msg).error || msg; } catch (_) {}
+      if (/^\s*</.test(msg)) msg = 'server unavailable';   // an HTML error page
+      if (msg === 'Failed to fetch') msg = 'no connection';
+      msg = msg.slice(0, 160);
+      if (_cond) { el.className = 'drive-cond'; el.innerHTML = conditionsHtml(_cond, msg); }
+      else {
+        el.className = 'drive-cond drive-cond-loading drive-cond-error';
+        el.innerHTML = `⚠️ ${/^Couldn't/.test(msg) ? escHtml(msg) : `Driving conditions couldn't load: ${escHtml(msg)}`}
+          <button type="button" class="btn btn-ghost btn-sm" onclick="Dashboard.loadConditions()">Retry</button>`;
+      }
     }
+    // The server updates every 15 min; check back every 5 so the screen is
+    // never more than a few minutes behind it. Stops once you leave the dashboard.
+    clearTimeout(_condTimer);
+    _condTimer = setTimeout(() => {
+      if (document.getElementById('drive-conditions')?.offsetParent) loadConditions();
+      else _condTimer = null;
+    }, 5 * 60 * 1000);
   }
 
   async function load() {
@@ -1076,5 +1103,5 @@ const Dashboard = (() => {
     } catch (e) { Toast.show('Failed to delete', 'error'); }
   }
 
-  return { load, watchlistAdd, watchlistEdit, watchlistDel, _mktToggle, _noteToggle };
+  return { load, loadConditions, watchlistAdd, watchlistEdit, watchlistDel, _mktToggle, _noteToggle };
 })();
