@@ -74,13 +74,37 @@ function tomtomUsage() {
   if (today !== _ttDay) { _ttDay = today; _ttUsed = 0; }
   return { used: _ttUsed, cap: TOMTOM_DAILY_CAP };
 }
+// TomTom refuses bursts (HTTP 429), so calls go through a small queue: at most
+// 2 at once, ~4 per second, with a retry if TomTom still says "slow down".
+const _ttQueue = [];
+let _ttActive = 0, _ttLast = 0;
+function _ttPump() {
+  if (_ttActive >= 2 || !_ttQueue.length) return;
+  const gap = Math.max(0, _ttLast + 250 - Date.now());
+  if (gap) { setTimeout(_ttPump, gap); return; }
+  const job = _ttQueue.shift();
+  _ttActive++; _ttLast = Date.now();
+  job().finally(() => { _ttActive--; _ttPump(); });
+  _ttPump();
+}
 function tomtom(path, params = {}) {
   const key = (process.env.TOMTOM_API_KEY || '').trim();
   if (!key) return Promise.reject(new Error('TomTom not set up'));
-  if (tomtomUsage().used >= TOMTOM_DAILY_CAP) return Promise.reject(new Error('daily TomTom limit reached'));
-  _ttUsed++;
   const qs = new URLSearchParams({ ...params, key });
-  return getJson(`https://api.tomtom.com${path}?${qs}`);
+  const url = `https://api.tomtom.com${path}?${qs}`;
+  return new Promise((resolve, reject) => {
+    const attempt = async n => {
+      if (tomtomUsage().used >= TOMTOM_DAILY_CAP) throw new Error('daily TomTom limit reached');
+      _ttUsed++;
+      try { return await getJson(url); }
+      catch (e) {
+        if (/ 429$/.test(e.message) && n < 2) { await new Promise(r => setTimeout(r, 1500 * (n + 1))); return attempt(n + 1); }
+        throw e;
+      }
+    };
+    _ttQueue.push(() => attempt(0).then(resolve, reject));
+    _ttPump();
+  });
 }
 
 function weatherText(code) {
@@ -352,14 +376,15 @@ async function refresh() {
 refresh();
 
 // ── Google cross-check ────────────────────────────
-// Agree = both put the road in the same band (flowing / slow / heavy).
-// Close match = different bands but within 15 points of each other.
-function compare(tomtomRatio, googleRatio) {
-  const a = trafficLevel(tomtomRatio), b = trafficLevel(googleRatio);
-  const way = googleRatio < tomtomRatio ? 'slower' : 'faster';
-  if (a === b) return { agree: true, text: 'Google agrees' };
-  if (Math.abs(tomtomRatio - googleRatio) <= 0.15) return { agree: true, text: `Close match (Google a bit ${way})` };
-  return { agree: false, text: `Google shows it ${way}` };
+// Compares the drive time each service predicts right now for the same trip.
+// (Their "no traffic" baselines differ, so % of normal isn't a fair test.)
+// Agree: within 15% or 1 min. Close match: within 25% or 2 min.
+function compare(tomtomMin, googleMin) {
+  const diff = Math.abs(tomtomMin - googleMin), rel = diff / Math.max(tomtomMin, googleMin, 0.1);
+  const way = googleMin > tomtomMin ? 'slower' : 'faster';
+  if (rel <= 0.15 || diff <= 1) return { agree: true, text: 'Google agrees' };
+  if (rel <= 0.25 || diff <= 2) return { agree: true, text: `Close match (Google a bit ${way})` };
+  return { agree: false, text: `Google shows it ${way} (${Math.round(googleMin)} vs ${Math.round(tomtomMin)} min)` };
 }
 const pct = r => Math.round(r * 100);
 
@@ -396,7 +421,8 @@ async function verifyGarage() {
       tomtom: tLegs.length ? { level: trafficLevel(avg(tLegs)), flowPct: pct(avg(tLegs)) } : null,
       google: gLegs.length ? { level: trafficLevel(avg(gLegs)), flowPct: pct(avg(gLegs)) } : null,
     };
-    if (row.tomtom && row.google) Object.assign(row, compare(avg(tLegs), avg(gLegs)));
+    const total = xs => xs.reduce((s, x) => s + x.minutes, 0);
+    if (tLegs.length === legs.length && gLegs.length === legs.length) Object.assign(row, compare(total(tLegs), total(gLegs)));
     else {
       const err = legs.map(l => l.google.error ? `Google: ${l.google.error}` : l.tomtom.error ? `TomTom: ${l.tomtom.error}` : '').find(Boolean);
       Object.assign(row, { agree: null, text: `Check failed (${err || 'no data'})` });
@@ -411,12 +437,11 @@ async function verifyGarage() {
 async function verifyPoint(flow) {
   if (!flow?.coords || flow.coords.length < 2) throw new Error('no road segment to check');
   const from = flow.coords[0], to = flow.coords[flow.coords.length - 1];
-  const g = await google.routeRatio(from, to);
-  const ttRatio = flow.freeTravel && flow.travel ? Math.min(1, flow.freeTravel / flow.travel) : flow.ratio;
+  const [t, g] = await Promise.all([tomtomRoute(from, to), google.routeRatio(from, to)]);
   return {
-    tomtom: { level: trafficLevel(ttRatio), flowPct: pct(ttRatio), minutes: Math.round(flow.travel / 6) / 10, normalMinutes: Math.round(flow.freeTravel / 6) / 10 },
+    tomtom: { level: trafficLevel(t.ratio), flowPct: pct(t.ratio), minutes: t.minutes, normalMinutes: t.normalMinutes },
     google: { level: trafficLevel(g.ratio), flowPct: pct(g.ratio), minutes: g.minutes, normalMinutes: g.normalMinutes, miles: g.miles },
-    ...compare(ttRatio, g.ratio),
+    ...compare(t.minutes, g.minutes),
   };
 }
 
