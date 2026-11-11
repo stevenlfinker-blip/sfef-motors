@@ -369,7 +369,7 @@ tr:hover td { background: var(--elevated); }
 .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 label { display: block; font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; }
-input[type=text], input[type=search], input[type=number], input[type=date], input[type=email], input[type=password], input[type=file], select, textarea {
+input[type=text], input[type=search], input[type=url], input[type=number], input[type=date], input[type=email], input[type=password], input[type=file], select, textarea {
   width: 100%;
   background: var(--input-bg);
   border: 1px solid var(--border-light);
@@ -646,6 +646,7 @@ th.sortable:hover { color: var(--accent); }
   /* ── Prevent iOS auto-zoom on input focus (must be ≥16px) ── */
   input[type=text],
   input[type=search],
+  input[type=url],
   input[type=number],
   input[type=date],
   input[type=email],
@@ -1187,3 +1188,23 @@ th.sortable:hover { color: var(--accent); }
 .drive-chip-x:hover { color: var(--red); }
 .drive-chip-clear { color: var(--text-muted); border-style: dashed; }
 .dash-toolbar { display: flex; justify-content: flex-end; margin: -8px 0 8px; }
+
+/* ── Acquisition Watchlist cards ── */
+.wl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.wl-card { background: var(--elevated); border: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; }
+.wl-photo { aspect-ratio: 16 / 10; background: var(--input-bg); display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; }
+.wl-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wl-photo span { color: var(--text-muted); font-size: 12px; }
+.wl-body { padding: 12px; display: flex; flex-direction: column; gap: 5px; flex: 1; }
+.wl-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.wl-title { font-weight: 700; font-size: 14px; color: var(--text); }
+.wl-price { font-size: 18px; font-weight: 700; color: var(--accent); }
+.wl-meta { font-size: 12px; color: var(--text-muted); }
+.wl-summary { font-size: 12px; color: var(--text); line-height: 1.45; }
+.wl-notes { font-size: 12px; color: var(--text-muted); }
+.wl-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 6px; }
+.wl-checked { font-size: 10px; color: var(--text-muted); }
+.wl-form-photo { display: flex; gap: 12px; align-items: flex-start; }
+.wl-form-thumb { width: 120px; height: 80px; flex: none; background: var(--input-bg); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 11px; color: var(--text-muted); }
+.wl-form-thumb img { width: 100%; height: 100%; object-fit: cover; }
+@media (max-width: 700px) { .wl-grid { grid-template-columns: 1fr; } .wl-form-photo { flex-direction: column; } }

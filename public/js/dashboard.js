@@ -664,17 +664,25 @@ const Dashboard = (() => {
       const cls = { High: 'badge-priority-high', Medium: 'badge-priority-medium', Low: 'badge-priority-low' };
       return `<span class="badge ${cls[p] || 'badge-neutral'}">${escHtml(p)}</span>`;
     }
-
-    const rows = items.map(w => `
-      <div class="dash-row" style="align-items:flex-start">
-        <div style="flex:1;min-width:0">
-          <div class="dash-row-label">${escHtml(w.make)} ${escHtml(w.model)}${escHtml(w.year ? ' '+w.year : '')}</div>
-          <div class="dash-row-meta">${w.source ? escHtml(w.source)+' · ' : ''}${w.asking_price ? fmt$(w.asking_price) : 'Price TBD'}</div>
+    const host = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (_) { return 'listing'; } };
+    const cards = items.map(w => `
+      <div class="wl-card">
+        <div class="wl-photo" ${w.photo_path ? `onclick="window.open('${escHtml(w.photo_path)}','_blank')"` : `onclick="Dashboard.watchlistEdit(${w.id})"`}>
+          ${w.photo_path ? `<img src="${escHtml(w.photo_path)}" alt="${escHtml(w.make + ' ' + w.model)}" loading="lazy">` : '<span>📷 Add photo</span>'}
         </div>
-        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0">
-          ${priorityBadge(w.priority)}
-          <button class="btn btn-secondary btn-sm" onclick="Dashboard.watchlistEdit(${w.id})" style="padding:2px 6px;font-size:10px">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="Dashboard.watchlistDel(${w.id})" style="padding:2px 6px;font-size:10px">✕</button>
+        <div class="wl-body">
+          <div class="wl-top"><div class="wl-title">${escHtml(w.year ? w.year + ' ' : '')}${escHtml(w.make)} ${escHtml(w.model)}</div>${priorityBadge(w.priority)}</div>
+          <div class="wl-price">${w.asking_price ? fmt$(w.asking_price) : 'Price TBD'}</div>
+          <div class="wl-meta">${[w.mileage ? `${Number(w.mileage).toLocaleString()} mi` : '', w.location, w.source].filter(Boolean).map(escHtml).join(' · ')}</div>
+          ${w.summary ? `<div class="wl-summary">${escHtml(w.summary)}</div>` : ''}
+          ${w.notes ? `<div class="wl-notes">📝 ${escHtml(w.notes)}</div>` : ''}
+          <div class="wl-actions">
+            ${w.url ? `<a class="btn btn-secondary btn-sm" href="${escHtml(w.url)}" target="_blank" rel="noopener">View on ${escHtml(host(w.url))} ↗</a>
+              <button class="btn btn-ghost btn-sm" onclick="Dashboard.watchlistRefresh(${w.id}, this)" title="Re-read the listing for the latest price">⟳ Update</button>` : ''}
+            <button class="btn btn-ghost btn-sm" onclick="Dashboard.watchlistEdit(${w.id})">Edit</button>
+            <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="Dashboard.watchlistDel(${w.id})">✕</button>
+          </div>
+          ${w.last_checked ? `<div class="wl-checked">Checked ${escHtml(new Date(w.last_checked).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}</div>` : ''}
         </div>
       </div>`).join('');
 
@@ -684,7 +692,7 @@ const Dashboard = (() => {
         <button class="btn btn-primary btn-sm" onclick="Dashboard.watchlistAdd()" style="font-size:10px;padding:3px 8px">+ Add</button>
       </div>
       <div class="dash-panel-body">
-        ${rows || '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No vehicles on watchlist.</div>'}
+        ${cards ? `<div class="wl-grid">${cards}</div>` : '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">No vehicles on watchlist. Tap + Add and paste a listing link.</div>'}
       </div>
     </div>`;
   }
@@ -919,10 +927,20 @@ const Dashboard = (() => {
   }
 
   // ── Watchlist CRUD helpers ────────────────────────
+  let _wlPulledImage = null; // photo found on the listing, offered in the form
+
   function watchlistFormHtml(w = {}) {
     const PRI = ['High','Medium','Low'];
-    const priOpts = PRI.map(p => `<option value="${p}" ${w.priority===p?'selected':''}>${p}</option>`).join('');
+    const priOpts = PRI.map(p => `<option value="${p}" ${(w.priority || 'Medium')===p?'selected':''}>${p}</option>`).join('');
+    _wlPulledImage = null;
     return `
+      <div class="form-row"><label>Listing link</label>
+        <div style="display:flex;gap:8px">
+          <input type="url" id="wl-url" value="${escHtml(w.url||'')}" placeholder="Paste the listing's web address" style="flex:1;min-width:0">
+          <button type="button" class="btn btn-secondary" id="wl-pull" onclick="Dashboard.watchlistPull()">Pull details</button>
+        </div>
+        <div id="wl-pull-msg" style="font-size:11px;color:var(--text-muted);margin-top:5px">Fills in the details and finds a photo from the page. Some sites block this — then just type them in.</div>
+      </div>
       <div class="form-row-2">
         <div class="form-row"><label>Year</label><input type="text" id="wl-year" value="${escHtml(w.year||'')}" placeholder="2024" maxlength="4"></div>
         <div class="form-row"><label>Priority</label><select id="wl-priority">${priOpts}</select></div>
@@ -932,21 +950,84 @@ const Dashboard = (() => {
         <div class="form-row"><label>Model</label><input type="text" id="wl-model" value="${escHtml(w.model||'')}" placeholder="911"></div>
       </div>
       <div class="form-row-2">
-        <div class="form-row"><label>Asking Price ($)</label><input type="number" id="wl-price" value="${w.asking_price||''}" placeholder="0" min="0" step="100"></div>
+        <div class="form-row"><label>Price ($)</label><input type="number" id="wl-price" value="${w.asking_price||''}" placeholder="0" min="0" step="100"></div>
+        <div class="form-row"><label>Mileage</label><input type="number" id="wl-mileage" value="${escHtml(w.mileage||'')}" placeholder="0" min="0"></div>
+      </div>
+      <div class="form-row-2">
         <div class="form-row"><label>Source</label><input type="text" id="wl-source" value="${escHtml(w.source||'')}" placeholder="BaT, dealer, private…"></div>
+        <div class="form-row"><label>Location</label><input type="text" id="wl-location" value="${escHtml(w.location||'')}" placeholder="City, State"></div>
+      </div>
+      <input type="hidden" id="wl-summary" value="${escHtml(w.summary||'')}">
+      <div class="form-row"><label>Photo</label>
+        <div class="wl-form-photo">
+          <div id="wl-photo-preview" class="wl-form-thumb">${w.photo_path ? `<img src="${escHtml(w.photo_path)}" alt="">` : '<span>No photo</span>'}</div>
+          <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+            <label class="checkbox-row hidden" id="wl-use-pulled-row"><input type="checkbox" id="wl-use-pulled" checked><span>Use the photo from the listing</span></label>
+            <input type="file" id="wl-photo" accept="image/*" onchange="Dashboard.watchlistPreview(this)">
+            <div style="font-size:11px;color:var(--text-muted)">Or take/choose your own photo.</div>
+            ${w.photo_path ? '<label class="checkbox-row"><input type="checkbox" id="wl-remove-photo"><span>Remove current photo</span></label>' : ''}
+          </div>
+        </div>
       </div>
       <div class="form-row"><label>Notes</label><textarea id="wl-notes">${escHtml(w.notes||'')}</textarea></div>`;
   }
 
+  async function watchlistPull() {
+    const url = document.getElementById('wl-url').value.trim();
+    const msg = document.getElementById('wl-pull-msg'), btn = document.getElementById('wl-pull');
+    if (!url) { msg.textContent = 'Paste a link first.'; return; }
+    btn.disabled = true; btn.textContent = 'Reading…';
+    msg.style.color = 'var(--text-muted)'; msg.textContent = 'Reading the listing — this can take a few seconds…';
+    try {
+      const d = await API.post('/api/watchlist/lookup', { url });
+      const set = (id, v) => { if (v != null && v !== '') document.getElementById(id).value = v; };
+      set('wl-year', d.year); set('wl-make', d.make); set('wl-model', d.model);
+      set('wl-price', d.price); set('wl-mileage', d.mileage); set('wl-location', d.location);
+      set('wl-source', d.seller); set('wl-summary', d.summary); set('wl-url', d.url);
+      const found = ['year', 'make', 'model', 'price', 'mileage', 'location'].filter(k => d[k]).length;
+      msg.style.color = 'var(--green)';
+      msg.textContent = `Filled in ${found} of 6 details${d.priceKind === 'sold' ? ' (the price is what it sold for)' : d.priceKind === 'current bid' ? ' (the price is the current bid)' : ''}${d.image ? ' and found a photo' : ''}. Check them before saving.`;
+      if (d.image) {
+        _wlPulledImage = d.image;
+        document.getElementById('wl-photo-preview').innerHTML = `<img src="${escHtml(d.image)}" alt="" referrerpolicy="no-referrer">`;
+        document.getElementById('wl-use-pulled-row').classList.remove('hidden');
+      }
+    } catch (e) {
+      let m = e.message; try { m = JSON.parse(m).error || m; } catch (_) {}
+      msg.style.color = 'var(--orange)'; msg.textContent = m;
+    }
+    btn.disabled = false; btn.textContent = 'Pull details';
+  }
+
+  function watchlistPreview(input) {
+    const f = input.files[0];
+    if (!f) return;
+    document.getElementById('wl-photo-preview').innerHTML = `<img src="${URL.createObjectURL(f)}" alt="">`;
+    const pulled = document.getElementById('wl-use-pulled');
+    if (pulled) pulled.checked = false; // your own photo wins
+  }
+
+  // After saving the details: upload your photo, or fetch the listing's, or remove.
+  async function savePhotoChoice(id) {
+    const file = document.getElementById('wl-photo')?.files[0];
+    const usePulled = _wlPulledImage && document.getElementById('wl-use-pulled')?.checked;
+    if (file) {
+      const fd = new FormData(); fd.append('photo', file);
+      await API.post(`/api/watchlist/${id}/photo`, fd);
+    } else if (usePulled) {
+      await API.post(`/api/watchlist/${id}/photo-from-url`, { url: _wlPulledImage });
+    } else if (document.getElementById('wl-remove-photo')?.checked) {
+      await API.del(`/api/watchlist/${id}/photo`);
+    }
+  }
+
   function collectWatchlist() {
+    const v = id => document.getElementById(id).value.trim();
     return {
-      year:         document.getElementById('wl-year').value.trim(),
-      make:         document.getElementById('wl-make').value.trim(),
-      model:        document.getElementById('wl-model').value.trim(),
-      asking_price: parseFloat(document.getElementById('wl-price').value) || 0,
-      source:       document.getElementById('wl-source').value.trim(),
-      priority:     document.getElementById('wl-priority').value,
-      notes:        document.getElementById('wl-notes').value.trim(),
+      year: v('wl-year'), make: v('wl-make'), model: v('wl-model'),
+      asking_price: parseFloat(v('wl-price')) || 0, mileage: v('wl-mileage'),
+      source: v('wl-source'), location: v('wl-location'), url: v('wl-url'), summary: v('wl-summary'),
+      priority: document.getElementById('wl-priority').value, notes: v('wl-notes'),
     };
   }
 
@@ -982,19 +1063,13 @@ const Dashboard = (() => {
 
       const hidden = new Set(hiddenPanels());
       const show = k => !hidden.has(k);
-      const showColl = show('collection'), showDaily = show('daily');
       el.innerHTML =
         hudWidget(cars, maint, parts, tools, cleaning, costs, events, watchlist, valuationMap) +
         `<div class="dash-toolbar"><button type="button" class="btn btn-ghost btn-sm" onclick="Dashboard.customize()">⚙ Customize dashboard</button></div>` +
         (show('market') ? collectiblesMarketWidget(cars, valuationMap, marketHistory) : '') +
         (show('spending') ? '<div class="dash-grid-2-wide" style="margin-top:12px">' + monthlySpendWidget(costs) + spendByCatWidget(costs) + '</div>' : '') +
         (show('mileage') ? mileageTrackerWidget(cars) : '') +
-        (showColl || showDaily ? `<div class="${showColl && showDaily ? 'dash-grid-2' : 'dash-full'}">` +
-          (showColl ? collectionValueWidget(cars, valuationMap) : '') +
-          (showDaily ? dailyFleetValueWidget(cars, valuationMap) : '') +
-        '</div>' : '') +
-        (show('events') ? '<div class="dash-full">' + upcomingEventsWidget(events) + '</div>' : '') +
-        (show('maintenance') ? '<div class="dash-full">' + pendingMaintWidget(maint) + '</div>' : '');
+        (show('events') ? '<div class="dash-full">' + upcomingEventsWidget(events) + '</div>' : '');
       startHudClock();
       if (show('market')) _initMktChart();
       if (show('drive')) refreshDriveBar(); // separate request so slow weather never holds up the dashboard
@@ -1012,8 +1087,7 @@ const Dashboard = (() => {
   const PANELS = [
     ['drive', 'Driving conditions bar'], ['market', 'Collectibles Market Intelligence'],
     ['spending', 'Monthly spending & by category'], ['mileage', 'Mileage tracker'],
-    ['collection', 'Collection'], ['daily', 'Daily Drivers'],
-    ['events', 'Upcoming events'], ['maintenance', 'Pending maintenance'],
+    ['events', 'Upcoming events'],
   ];
   function hiddenPanels() {
     if (App.me?.id && Array.isArray(App.me.dashboard_hidden)) return App.me.dashboard_hidden;
@@ -1056,7 +1130,8 @@ const Dashboard = (() => {
       const data = collectWatchlist();
       if (!data.make || !data.model) { Toast.show('Make and model are required', 'error'); return; }
       try {
-        await API.post('/api/watchlist', data);
+        const item = await API.post('/api/watchlist', data);
+        try { await savePhotoChoice(item.id); } catch (e) { Toast.show('Saved, but the photo failed', 'error'); }
         Modal.hide();
         Toast.show('Added to watchlist');
         reloadWatch();
@@ -1074,11 +1149,24 @@ const Dashboard = (() => {
       if (!data.make || !data.model) { Toast.show('Make and model are required', 'error'); return; }
       try {
         await API.put(`/api/watchlist/${id}`, data);
+        try { await savePhotoChoice(id); } catch (e) { Toast.show('Saved, but the photo failed', 'error'); }
         Modal.hide();
         Toast.show('Watchlist updated');
         reloadWatch();
       } catch (e) { Toast.show('Failed to update', 'error'); }
     });
+  }
+
+  async function watchlistRefresh(id, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+    try {
+      const r = await API.post(`/api/watchlist/${id}/refresh`, {});
+      Toast.show(r.priceChanged ? `Price changed: ${fmt$(r.priceChanged.from)} → ${fmt$(r.priceChanged.to)}` : 'Listing checked — no price change');
+    } catch (e) {
+      let m = e.message; try { m = JSON.parse(m).error || m; } catch (_) {}
+      Toast.show(m, 'error');
+    }
+    reloadWatch();
   }
 
   async function watchlistDel(id) {
@@ -1091,5 +1179,5 @@ const Dashboard = (() => {
     } catch (e) { Toast.show('Failed to delete', 'error'); }
   }
 
-  return { load, loadWatchlist, customize, watchlistAdd, watchlistEdit, watchlistDel, _mktToggle, _noteToggle };
+  return { load, loadWatchlist, customize, watchlistAdd, watchlistEdit, watchlistDel, watchlistPull, watchlistPreview, watchlistRefresh, _mktToggle, _noteToggle };
 })();
