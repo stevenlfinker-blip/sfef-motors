@@ -985,6 +985,14 @@ const Dashboard = (() => {
       set('wl-price', d.price); set('wl-mileage', d.mileage); set('wl-location', d.location);
       set('wl-source', d.seller); set('wl-summary', d.summary); set('wl-url', d.url);
       const found = ['year', 'make', 'model', 'price', 'mileage', 'location'].filter(k => d[k]).length;
+      if (d.blocked) {
+        msg.style.color = 'var(--orange)';
+        msg.textContent = d.make
+          ? `${d.seller || 'This site'} blocks automatic reading, so year, make and model came from the link itself. Add the price, mileage and a photo yourself.`
+          : `${d.seller || 'This site'} blocks automatic reading — please fill in the details and add a photo yourself.`;
+        btn.disabled = false; btn.textContent = 'Pull details';
+        return;
+      }
       msg.style.color = 'var(--green)';
       msg.textContent = `Filled in ${found} of 6 details${d.priceKind === 'sold' ? ' (the price is what it sold for)' : d.priceKind === 'current bid' ? ' (the price is the current bid)' : ''}${d.image ? ' and found a photo' : ''}. Check them before saving.`;
       if (d.image) {

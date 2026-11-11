@@ -95,7 +95,13 @@ router.post('/:id/photo-from-url', async (req, res) => {
     const { buf, ext } = await downloadImage(url);
     savePhoto(req.params.id, buf, ext);
     res.json(get(req.params.id));
-  } catch (e) { res.status(502).json({ error: `Couldn't get the photo: ${e.message}` }); }
+  } catch (e) {
+    // The site won't let the server download it — link to it instead (browsers can still show it).
+    const old = get(req.params.id).photo_path;
+    db.prepare('UPDATE watchlist SET photo_path = ? WHERE id = ?').run(url, req.params.id);
+    removePhotoFile(old);
+    res.json({ ...get(req.params.id), linked: true });
+  }
 });
 
 router.delete('/:id/photo', (req, res) => {

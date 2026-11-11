@@ -162,8 +162,38 @@ function splitTitle(title) {
   return m ? { year: m[1], make: m[2], model: m[3].trim() } : {};
 }
 
+// Many listing links spell out the car: /listing/2009-mercedes-benz-sl550-133/
+const MULTI_MAKES = ['mercedes-benz', 'land-rover', 'alfa-romeo', 'aston-martin', 'rolls-royce', 'de-tomaso', 'austin-healey', 'mercedes-amg'];
+const MAKE_CASE = { bmw: 'BMW', gmc: 'GMC', mg: 'MG', amc: 'AMC', ram: 'RAM', 'mercedes-benz': 'Mercedes-Benz', 'mercedes-amg': 'Mercedes-AMG' };
+function fromSlug(url) {
+  let seg;
+  try { seg = new URL(url).pathname.split('/').filter(Boolean).reverse().find(p => /(19|20)\d{2}-[a-z]/i.test(p)); } catch (_) { return {}; }
+  if (!seg) return {};
+  const m = seg.toLowerCase().match(/((?:19|20)\d{2})-(.+)/);
+  if (!m) return {};
+  let rest = m[2].replace(/-\d+$/, ''); // trailing listing number
+  let make = MULTI_MAKES.find(mm => rest.startsWith(mm + '-'));
+  if (!make) make = rest.split('-')[0];
+  const model = rest.slice(make.length + 1).split('-').filter(Boolean)
+    .map(w => (/\d/.test(w) || w.length <= 2 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1))).join(' ');
+  const nice = MAKE_CASE[make] || make.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join('-');
+  return model ? { year: m[1], make: nice, model } : {};
+}
+
 async function readListing(rawUrl) {
-  const { buf, type, finalUrl } = await safeFetch(rawUrl, { accept: 'text/html,application/xhtml+xml', maxBytes: MAX_HTML });
+  let page;
+  try {
+    page = await safeFetch(rawUrl, { accept: 'text/html,application/xhtml+xml', maxBytes: MAX_HTML });
+  } catch (e) {
+    // Blocked (common on auction sites): still give what the link itself says.
+    if (/blocked/.test(e.message)) {
+      const guess = fromSlug(rawUrl);
+      let host = ''; try { host = new URL(rawUrl).hostname.replace(/^www\./, ''); } catch (_) {}
+      return { url: rawUrl, blocked: true, seller: host, image: null, ...guess };
+    }
+    throw e;
+  }
+  const { buf, type, finalUrl } = page;
   if (!/html/.test(type)) throw new Error('that link isn’t a web page');
   const html = buf.toString('utf8');
   const title = meta(html, 'og:title') || decode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]);
