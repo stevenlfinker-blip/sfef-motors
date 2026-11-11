@@ -33,6 +33,10 @@
         <span class="nav-icon">◈</span>
         <span class="nav-label">Dashboard</span>
       </div>
+      <div class="nav-item" data-section="drive">
+        <span class="nav-icon">◎</span>
+        <span class="nav-label">Driving Conditions</span>
+      </div>
 
       <div class="nav-section-label">Fleet</div>
       <div class="nav-item" data-section="cars">
@@ -125,6 +129,14 @@
     <!-- Dashboard -->
     <section id="section-dashboard" class="section active">
       <div id="dashboard-content"></div>
+    </section>
+
+    <!-- Driving Conditions -->
+    <section id="section-drive" class="section">
+      <div class="section-header">
+        <div class="section-title">Driving <span>/ Conditions</span></div>
+      </div>
+      <div id="section-drive-content"></div>
     </section>
 
     <!-- Cars -->
@@ -537,6 +549,7 @@
 <script src="/js/chat.js"></script>
 <script src="/js/team.js"></script>
 <script src="/js/push.js"></script>
+<script src="/js/drive.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});

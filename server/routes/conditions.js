@@ -1,27 +1,32 @@
-// Ideal driving conditions for the dashboard: weather, flooding, heat,
-// humidity and traffic near the garage, rolled up into one verdict.
+// Driving conditions: weather, flooding, heat, humidity and traffic, rolled
+// up into one verdict — for the garage area (refreshed every 15 min) and for
+// any place searched in the Driving Conditions tab.
 //
-// Sources (all free): Open-Meteo forecast (no key), National Weather Service
-// alerts for flood/heat/storm warnings (US only, no key), and TomTom live
-// traffic when TOMTOM_API_KEY is set — otherwise a Miami rush-hour estimate.
-//
-// Only rounded coordinates (~1 km) are sent out, never the street address.
+// Sources: Open-Meteo forecast and National Weather Service alerts (free, no
+// key); TomTom live traffic, incidents and place search (TOMTOM_API_KEY); and
+// Google's Routes API to cross-check TomTom's traffic (GOOGLE_MAPS_SERVER_KEY).
+// For the garage only rounded coordinates go out, never the street address.
 const express = require('express');
 const router = express.Router();
+const google = require('../google-traffic');
 
 const LAT = Number(process.env.GARAGE_LAT || 25.9);
 const LON = Number(process.env.GARAGE_LON || -80.17);
 const PLACE = process.env.GARAGE_PLACE || 'North Miami';
 const TZ = 'America/New_York';
-const REFRESH_MS = 15 * 60 * 1000; // 20 TomTom calls each → ~1,900/day (free tier: 2,500)
+const REFRESH_MS = 15 * 60 * 1000; // 20 TomTom calls each → ~1,900/day
 const RETRY_MS = 5 * 60 * 1000;     // after a failed update
 const STALE_MS = 20 * 60 * 1000;    // older than this = flagged out of date
+const TOMTOM_DAILY_CAP = Number(process.env.TOMTOM_DAILY_CAP || 2450); // free tier: 2,500/day
+const SEARCH_TTL = 10 * 60 * 1000;
+const VERIFY_TTL = 15 * 60 * 1000;
 
 // Live traffic check points (~25 mile area), grouped into corridors.
 // Positions come from OpenStreetMap road geometry (2026-11-11); the I-95 point
 // at 125th St was also confirmed on Google Maps' traffic layer. I-95 is
 // sampled in both directions — northbound lanes sit on the east side, so each
 // point is nudged ~15 m outward to make TomTom snap to the right carriageway.
+// `google` lists the stretch(es) Google drives to cross-check each corridor.
 const NB = 0.00015, SB = -0.00015;
 const CORRIDORS = [
   { name: 'I-95', points: [
@@ -30,19 +35,27 @@ const CORRIDORS = [
     ['Aventura NB', 25.97902, -80.16585 + NB], ['Aventura SB', 25.97895, -80.16620 + SB],
     ['Hollywood NB', 26.08030, -80.16856 + NB], ['Hollywood SB', 26.07954, -80.16907 + SB],
     ['Ft Lauderdale NB', 26.19098, -80.15158 + NB], ['Ft Lauderdale SB', 26.19099, -80.15194 + SB],
+  ], google: [
+    ['Downtown → Aventura (NB)', [25.78993, -80.20423 + NB], [25.97902, -80.16585 + NB]],
+    ['Aventura → Downtown (SB)', [25.97895, -80.16620 + SB], [25.79005, -80.20485 + SB]],
   ] },
   { name: 'Collins Ave', points: [
     ['Mid-Beach', 25.81495, -80.12272], ['Surfside', 25.87805, -80.12185],
     ['Bal Harbour', 25.88940, -80.12390], ['Haulover', 25.90498, -80.12321],
     ['Sunny Isles', 25.93508, -80.12162],
-  ] },
-  { name: '163rd St', points: [['163rd St EB', 25.92582, -80.16502], ['Sunny Isles Blvd WB', 25.92651, -80.13982]] },
-  { name: 'Bay Harbor', points: [['Broad Causeway', 25.88820, -80.14497]] },
-  { name: 'Local', points: [['NE 125th St', 25.890, -80.189], ['Biscayne Blvd', 25.8905, -80.1635]] },
+  ], google: [['Mid-Beach → Sunny Isles', [25.81495, -80.12272], [25.93508, -80.12162]]] },
+  { name: '163rd St', points: [['163rd St EB', 25.92582, -80.16502], ['Sunny Isles Blvd WB', 25.92651, -80.13982]],
+    google: [['163rd St → Sunny Isles Blvd', [25.92582, -80.16502], [25.92629, -80.14014]]] },
+  { name: 'Bay Harbor', points: [['Broad Causeway', 25.88820, -80.14497]],
+    google: [['Broad Causeway', [25.88936, -80.15120], [25.88657, -80.13917]]] },
+  { name: 'Local', points: [['NE 125th St', 25.890, -80.189], ['Biscayne Blvd', 25.8905, -80.1635]],
+    google: [['NE 125th St → Biscayne Blvd', [25.890, -80.189], [25.8905, -80.1635]]] },
 ];
 
-let _cache = null; // { at, data }
+let _cache = null; // { at, data } for the garage
 let _lastError = null, _nextAt = null, _inflight = null;
+let _verify = null; // { at, data } Google cross-check of the garage corridors
+const _searchCache = new Map(); // "lat,lon" → { at, data }
 
 const RANK = { good: 0, fair: 1, poor: 2 };
 const worst = (...lv) => lv.reduce((a, b) => (RANK[b] > RANK[a] ? b : a), 'good');
@@ -51,6 +64,23 @@ async function getJson(url, headers = {}) {
   const r = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error(`${new URL(url).host} ${r.status}`);
   return r.json();
+}
+
+// Every TomTom call goes through here so the free daily allowance is never
+// exceeded; searches are refused (with a message) before that happens.
+let _ttDay = '', _ttUsed = 0;
+function tomtomUsage() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== _ttDay) { _ttDay = today; _ttUsed = 0; }
+  return { used: _ttUsed, cap: TOMTOM_DAILY_CAP };
+}
+function tomtom(path, params = {}) {
+  const key = (process.env.TOMTOM_API_KEY || '').trim();
+  if (!key) return Promise.reject(new Error('TomTom not set up'));
+  if (tomtomUsage().used >= TOMTOM_DAILY_CAP) return Promise.reject(new Error('daily TomTom limit reached'));
+  _ttUsed++;
+  const qs = new URLSearchParams({ ...params, key });
+  return getJson(`https://api.tomtom.com${path}?${qs}`);
 }
 
 function weatherText(code) {
@@ -137,19 +167,24 @@ function estimateTraffic(now) {
 
 const trafficLevel = r => (r >= 0.8 ? 'good' : r >= 0.55 ? 'fair' : 'poor');
 
-async function flowAt(key, lat, lon) {
-  const d = await getJson(`https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json?point=${lat},${lon}&unit=MPH&key=${encodeURIComponent(key)}`);
+async function flowAt(lat, lon) {
+  const d = await tomtom('/traffic/services/4/flowSegmentData/absolute/10/json', { point: `${lat},${lon}`, unit: 'MPH' });
   const f = d.flowSegmentData;
-  return { ratio: f.roadClosure ? 0 : Math.min(1, f.currentSpeed / f.freeFlowSpeed), speed: f.currentSpeed, free: f.freeFlowSpeed, closed: !!f.roadClosure };
+  const coords = (f.coordinates?.coordinate || []).map(c => [c.latitude, c.longitude]);
+  return {
+    ratio: f.roadClosure ? 0 : Math.min(1, f.currentSpeed / f.freeFlowSpeed),
+    speed: f.currentSpeed, free: f.freeFlowSpeed, closed: !!f.roadClosure,
+    travel: f.currentTravelTime, freeTravel: f.freeFlowTravelTime, coords,
+  };
 }
 
-async function liveTraffic(key) {
+async function corridorTraffic() {
   // 17 points per refresh; a few at a time to stay polite with the free tier.
   const jobs = CORRIDORS.flatMap(c => c.points.map(([label, lat, lon]) => ({ corridor: c.name, label, lat, lon })));
   const results = [];
   for (let i = 0; i < jobs.length; i += 5) {
     results.push(...await Promise.all(jobs.slice(i, i + 5).map(j =>
-      flowAt(key, j.lat, j.lon).then(r => ({ ...j, ...r })).catch(e => ({ ...j, error: e.message })))));
+      flowAt(j.lat, j.lon).then(r => ({ ...j, ...r })).catch(e => ({ ...j, error: e.message })))));
   }
   const ok = results.filter(r => !r.error);
   if (ok.length < jobs.length / 2) throw new Error(results.find(r => r.error)?.error || 'no data');
@@ -176,30 +211,61 @@ async function liveTraffic(key) {
     warning: missing ? `${missing} of ${results.length} traffic check points didn't respond` : null };
 }
 
-async function build() {
-  const om = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}`
+// TomTom incidents (accidents, closures, jams, roadwork) in a box around a point.
+const INCIDENT_TYPES = { 1: 'Accident', 2: 'Fog', 3: 'Dangerous conditions', 4: 'Rain', 5: 'Ice', 6: 'Traffic jam',
+  7: 'Lane closed', 8: 'Road closed', 9: 'Road work', 10: 'Wind', 11: 'Flooding', 14: 'Broken-down vehicle' };
+async function incidentsNear(lat, lon, km = 5) {
+  const dLat = km / 111, dLon = km / (111 * Math.cos(lat * Math.PI / 180));
+  const d = await tomtom('/traffic/services/5/incidentDetails', {
+    bbox: [lon - dLon, lat - dLat, lon + dLon, lat + dLat].map(n => n.toFixed(5)).join(','),
+    fields: '{incidents{type,properties{iconCategory,magnitudeOfDelay,events{description},from,to,delay,roadNumbers}}}',
+    language: 'en-US', timeValidityFilter: 'present',
+  });
+  return (d.incidents || []).map(i => {
+    const p = i.properties || {};
+    return {
+      type: INCIDENT_TYPES[p.iconCategory] || 'Incident',
+      severity: p.magnitudeOfDelay || 0, // 0 unknown · 1 minor · 2 moderate · 3 major · 4 closed
+      road: (p.roadNumbers || []).join(', ') || null,
+      from: p.from || null, to: p.to || null,
+      delayMin: p.delay ? Math.round(p.delay / 60) : 0,
+      text: p.events?.[0]?.description || null,
+    };
+  }).sort((a, b) => b.severity - a.severity || b.delayMin - a.delayMin);
+}
+
+// Traffic at a searched place: the nearest road's live speed, plus incidents nearby.
+async function pointTraffic(lat, lon, warnings) {
+  const [flow, incidents] = await Promise.all([
+    flowAt(lat, lon),
+    incidentsNear(lat, lon).catch(e => { warnings.push(`Traffic incidents unavailable (${e.message})`); return []; }),
+  ]);
+  let level = trafficLevel(flow.ratio);
+  const serious = incidents.filter(i => i.severity >= 3 || i.type === 'Road closed' || i.type === 'Accident');
+  if (level === 'good' && serious.length) level = 'fair';
+  const value = flow.closed ? 'Road closed' : level === 'good' ? 'Flowing' : level === 'fair' ? 'Slow' : 'Heavy';
+  const detail = `Nearest road ${Math.round(flow.speed)} mph (usually ${Math.round(flow.free)})`
+    + (incidents.length ? ` · ${incidents.length} incident${incidents.length > 1 ? 's' : ''} within 3 mi` : '') + ' · TomTom';
+  return { key: 'traffic', label: 'Traffic', level, value, detail, live: true, flow, incidents: incidents.slice(0, 8) };
+}
+
+async function fetchWeather(lat, lon, warnings) {
+  const om = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
     + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,weather_code,wind_gusts_10m'
     + '&hourly=precipitation_probability,precipitation,weather_code&forecast_hours=6'
     + `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=${encodeURIComponent(TZ)}`;
-  const warnings = [];
-  const [wx, nws, traffic] = await Promise.all([
+  const [wx, nws] = await Promise.all([
     getJson(om),
-    getJson(`https://api.weather.gov/alerts/active?point=${LAT},${LON}`, {
+    getJson(`https://api.weather.gov/alerts/active?point=${lat.toFixed(4)},${lon.toFixed(4)}`, {
       'User-Agent': 'SFEF-Motors garage dashboard', Accept: 'application/geo+json',
     }).catch(e => { warnings.push(`Flood/heat alerts unavailable (${e.message})`); return null; }),
-    process.env.TOMTOM_API_KEY
-      ? liveTraffic(process.env.TOMTOM_API_KEY.trim()).catch(e => {
-          console.error('[conditions] TomTom failed:', e.message);
-          warnings.push(`Live traffic unavailable (${e.message}) — showing a time-of-day estimate`);
-          const est = estimateTraffic(new Date());
-          return { ...est, detail: 'Live traffic failed — showing estimate' };
-        })
-      : estimateTraffic(new Date()),
   ]);
-  if (traffic.warning) warnings.push(traffic.warning);
   const alerts = (nws?.features || []).map(f => ({ event: f.properties.event, headline: f.properties.headline }));
-  const cur = wx.current, hourly = wx.hourly;
+  return { cur: wx.current, hourly: wx.hourly, alerts };
+}
 
+// Turns weather + traffic into the five factors, a verdict and the collectables call.
+function summarize({ place, lat, lon }, { cur, hourly, alerts }, traffic, warnings) {
   const factors = [
     rateWeather(cur, hourly, alerts),
     rateFlooding(cur, hourly, alerts),
@@ -225,7 +291,7 @@ async function build() {
 
   return {
     updatedAt: new Date().toISOString(),
-    place: PLACE,
+    place,
     overall: { level: overall, headline, detail: reason ? `Watch ${reason}` : 'All conditions look good' },
     collectables: keepHome
       ? { ok: false, text: `Keep the collectables in — ${keepHome}` }
@@ -233,7 +299,30 @@ async function build() {
     factors,
     alerts,
     warnings,
+    lat, lon,
   };
+}
+
+async function trafficOrEstimate(fn, warnings) {
+  if (!process.env.TOMTOM_API_KEY) return estimateTraffic(new Date());
+  try {
+    const t = await fn();
+    if (t.warning) warnings.push(t.warning);
+    return t;
+  } catch (e) {
+    console.error('[conditions] TomTom failed:', e.message);
+    warnings.push(`Live traffic unavailable (${e.message}) — showing a time-of-day estimate`);
+    return { ...estimateTraffic(new Date()), detail: 'Live traffic failed — showing estimate' };
+  }
+}
+
+async function build() {
+  const warnings = [];
+  const [wx, traffic] = await Promise.all([
+    fetchWeather(LAT, LON, warnings),
+    trafficOrEstimate(corridorTraffic, warnings),
+  ]);
+  return summarize({ place: PLACE, lat: LAT, lon: LON }, wx, traffic, warnings);
 }
 
 // Refreshes on its own every 15 minutes (whether or not anyone is looking),
@@ -259,6 +348,54 @@ async function refresh() {
 }
 refresh();
 
+// ── Google cross-check ────────────────────────────
+// Agree = both put the road in the same band (flowing / slow / heavy).
+// Close match = different bands but within 15 points of each other.
+function compare(tomtomRatio, googleRatio) {
+  const a = trafficLevel(tomtomRatio), b = trafficLevel(googleRatio);
+  const way = googleRatio < tomtomRatio ? 'slower' : 'faster';
+  if (a === b) return { agree: true, text: 'Google agrees' };
+  if (Math.abs(tomtomRatio - googleRatio) <= 0.15) return { agree: true, text: `Close match (Google a bit ${way})` };
+  return { agree: false, text: `Google shows it ${way}` };
+}
+const pct = r => Math.round(r * 100);
+
+async function verifyGarage() {
+  if (_verify && Date.now() - _verify.at < VERIFY_TTL) return _verify.data;
+  const corridors = _cache?.data?.factors?.find(f => f.key === 'traffic')?.corridors || [];
+  const rows = await Promise.all(CORRIDORS.map(async c => {
+    const tt = corridors.find(x => x.name === c.name);
+    try {
+      const legs = await Promise.all(c.google.map(([label, from, to]) => google.routeRatio(from, to).then(r => ({ label, ...r }))));
+      const gRatio = legs.reduce((s, l) => s + l.ratio, 0) / legs.length;
+      return {
+        name: c.name,
+        tomtom: tt ? { level: tt.level, flowPct: pct(tt.ratio), speed: tt.speed } : null,
+        google: { level: trafficLevel(gRatio), flowPct: pct(gRatio), legs },
+        ...(tt ? compare(tt.ratio, gRatio) : { agree: null, text: 'No TomTom data to compare' }),
+      };
+    } catch (e) {
+      return { name: c.name, tomtom: tt ? { level: tt.level, flowPct: pct(tt.ratio), speed: tt.speed } : null, google: null, agree: null, text: `Google check failed (${e.message})` };
+    }
+  }));
+  const data = { checkedAt: new Date().toISOString(), rows };
+  if (rows.some(r => r.google)) _verify = { at: Date.now(), data }; // don't cache a total failure
+  return data;
+}
+
+async function verifyPoint(flow) {
+  if (!flow?.coords || flow.coords.length < 2) throw new Error('no road segment to check');
+  const from = flow.coords[0], to = flow.coords[flow.coords.length - 1];
+  const g = await google.routeRatio(from, to);
+  const ttRatio = flow.freeTravel && flow.travel ? Math.min(1, flow.freeTravel / flow.travel) : flow.ratio;
+  return {
+    tomtom: { level: trafficLevel(ttRatio), flowPct: pct(ttRatio), minutes: Math.round(flow.travel / 6) / 10, normalMinutes: Math.round(flow.freeTravel / 6) / 10 },
+    google: { level: trafficLevel(g.ratio), flowPct: pct(g.ratio), minutes: g.minutes, normalMinutes: g.normalMinutes, miles: g.miles },
+    ...compare(ttRatio, g.ratio),
+  };
+}
+
+// ── Routes ────────────────────────────────────────
 router.get('/', async (req, res) => {
   if (!_cache) await refresh(); // first request right after a restart
   if (!_cache) {
@@ -271,6 +408,69 @@ router.get('/', async (req, res) => {
     lastError: _lastError,
     nextUpdateAt: _nextAt ? new Date(_nextAt).toISOString() : null,
   });
+});
+
+// What's switched on — the tab uses this to explain anything missing.
+router.get('/config', (req, res) => res.json({
+  tomtom: !!process.env.TOMTOM_API_KEY,
+  googleVerify: google.enabled(),
+  mapsKey: process.env.GOOGLE_MAPS_BROWSER_KEY || null,
+  garage: { place: PLACE, lat: LAT, lon: LON },
+  usage: { tomtom: tomtomUsage(), google: google.usage() },
+}));
+
+// Google cross-check of the garage-area corridors (only when the tab asks).
+router.get('/verify', async (req, res) => {
+  if (!google.enabled()) return res.json({ disabled: true });
+  try { res.json(await verifyGarage()); } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+// Place search → up to 5 matches (Florida-biased, US only).
+router.get('/search', async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 120);
+  if (q.length < 2) return res.status(400).json({ error: 'Type a place or address' });
+  try {
+    const d = await tomtom(`/search/2/search/${encodeURIComponent(q)}.json`, {
+      limit: 5, countrySet: 'US', lat: LAT, lon: LON, typeahead: false,
+    });
+    res.json((d.results || []).map(r => ({
+      name: r.poi?.name || r.address?.freeformAddress || q,
+      address: r.address?.freeformAddress || '',
+      lat: r.position.lat, lon: r.position.lon,
+    })));
+  } catch (e) {
+    res.status(502).json({ error: `Search failed (${e.message})` });
+  }
+});
+
+// Full conditions at a chosen place, with Google's cross-check of the traffic.
+router.get('/at', async (req, res) => {
+  const lat = Number(req.query.lat), lon = Number(req.query.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+    return res.status(400).json({ error: 'Bad location' });
+  }
+  const place = String(req.query.name || 'Searched place').slice(0, 120);
+  const key = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+  const hit = _searchCache.get(key);
+  if (hit && Date.now() - hit.at < SEARCH_TTL) return res.json({ ...hit.data, place });
+  try {
+    const warnings = [];
+    const [wx, traffic] = await Promise.all([
+      fetchWeather(lat, lon, warnings),
+      trafficOrEstimate(() => pointTraffic(lat, lon, warnings), warnings),
+    ]);
+    const data = summarize({ place, lat, lon }, wx, traffic, warnings);
+    if (google.enabled() && traffic.flow) {
+      try { data.verify = await verifyPoint(traffic.flow); }
+      catch (e) { data.verify = { agree: null, text: `Google check failed (${e.message})` }; }
+    }
+    if (traffic.flow) delete traffic.flow.coords; // not needed by the page
+    _searchCache.set(key, { at: Date.now(), data });
+    if (_searchCache.size > 200) _searchCache.delete(_searchCache.keys().next().value);
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({ error: `Couldn't get conditions there (${e.message})` });
+  }
 });
 
 router.refresh = refresh; // for tests

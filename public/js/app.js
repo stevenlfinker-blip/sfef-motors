@@ -42,6 +42,7 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
 // ── Navigation ─────────────────────────────────────
 const SECTION_TITLES = {
   dashboard:   'Dashboard',
+  drive:       'Driving Conditions',
   cars:        'Fleet · Cars',
   maintenance: 'Fleet · Maintenance',
   market:      'Fleet · Market Analytics',
@@ -147,6 +148,7 @@ const App = {
     // Load section data
     switch (section) {
       case 'dashboard':   Dashboard.load(); break;
+      case 'drive':       Drive.load(); break;
       case 'cars':        Cars.load(); break;
       case 'maintenance': Maintenance.load(); break;
       case 'parts':       Parts.load(); break;

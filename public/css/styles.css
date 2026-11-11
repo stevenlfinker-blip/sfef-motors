@@ -369,7 +369,7 @@ tr:hover td { background: var(--elevated); }
 .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 label { display: block; font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; }
-input[type=text], input[type=number], input[type=date], input[type=email], input[type=password], input[type=file], select, textarea {
+input[type=text], input[type=search], input[type=number], input[type=date], input[type=email], input[type=password], input[type=file], select, textarea {
   width: 100%;
   background: var(--input-bg);
   border: 1px solid var(--border-light);
@@ -645,6 +645,7 @@ th.sortable:hover { color: var(--accent); }
 
   /* ── Prevent iOS auto-zoom on input focus (must be ≥16px) ── */
   input[type=text],
+  input[type=search],
   input[type=number],
   input[type=date],
   input[type=email],
@@ -1114,3 +1115,63 @@ th.sortable:hover { color: var(--accent); }
 .drive-problem { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 12px; background: var(--orange-dim); border: 1px solid var(--orange); color: var(--orange); font-size: 12px; line-height: 1.5; }
 .drive-problem .btn { color: var(--orange); }
 .drive-cond-error { color: var(--orange); border-color: var(--orange); }
+
+/* ── Driving Conditions tab ── */
+.drive-summary {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%;
+  margin-bottom: 16px; padding: 10px 14px; text-align: left;
+  background: linear-gradient(90deg, var(--lvl-dim, var(--accent-dim)) 0%, var(--card) 60%);
+  border: 1px solid var(--border); border-left: 3px solid var(--lvl, var(--accent));
+  color: var(--text); font-size: 13px; cursor: pointer; font-family: inherit;
+}
+.drive-summary:hover { border-color: var(--border-light); }
+.drive-summary.lvl-good, .drive-cond .lvl-good, .drive-corridor.lvl-good { --lvl: var(--green); --lvl-dim: var(--green-dim); }
+.drive-summary.lvl-fair, .drive-cond .lvl-fair, .drive-corridor.lvl-fair { --lvl: var(--orange); --lvl-dim: var(--orange-dim); }
+.drive-summary.lvl-poor, .drive-cond .lvl-poor, .drive-corridor.lvl-poor { --lvl: var(--red); --lvl-dim: var(--red-dim); }
+.drive-summary strong { color: var(--lvl, var(--text)); }
+.drive-summary-bits { color: var(--text-muted); }
+.drive-summary-warn { color: var(--orange); }
+.drive-summary-go { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+
+.drive-search { display: flex; gap: 8px; margin-bottom: 10px; }
+.drive-search input { flex: 1; min-width: 0; }
+.drive-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.drive-chip {
+  padding: 5px 10px; border-radius: 14px; font-size: 12px; font-family: inherit;
+  background: var(--card); border: 1px solid var(--border); color: var(--text-muted);
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.drive-chip.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.drive-results { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.drive-result {
+  display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px;
+  background: var(--card); border: 1px solid var(--border); color: var(--text); font-family: inherit; font-size: 13px;
+}
+.drive-result:hover { border-color: var(--accent); }
+.drive-result .muted { font-size: 12px; }
+.drive-place { margin-bottom: 10px; font-size: 14px; }
+.drive-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media (max-width: 1100px) { .drive-grid { grid-template-columns: 1fr; } }
+.drive-panel { background: var(--card); border: 1px solid var(--border); padding: 14px; min-width: 0; margin-bottom: 12px; }
+.drive-grid .drive-panel { margin-bottom: 0; }
+.drive-panel-title { display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; }
+.drive-panel-link { font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--accent); }
+.drive-panel-note { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 10px; }
+.drive-panel-note code { color: var(--text); }
+.drive-verify-sum { font-size: 13px; margin-bottom: 10px; }
+.v-ok { color: var(--green); }
+.v-diff { color: var(--orange); }
+.muted { color: var(--text-muted); }
+.small { font-size: 11px; margin-top: 2px; }
+.drive-table { width: 100%; font-size: 12px; }
+.drive-table td { vertical-align: top; }
+.drive-map { height: 360px; background: var(--elevated); border: 1px solid var(--border); }
+.drive-map-msg { padding: 20px; font-size: 12px; color: var(--text-muted); line-height: 1.6; text-align: center; }
+.drive-incident { padding: 8px 0 8px 10px; border-top: 1px solid var(--border); border-left: 2px solid var(--text-muted); font-size: 13px; }
+.drive-incident.sev-2 { border-left-color: var(--orange); }
+.drive-incident.sev-3, .drive-incident.sev-4 { border-left-color: var(--red); }
+@media (max-width: 700px) {
+  .drive-summary-go { margin-left: 0; }
+  .drive-map { height: 300px; }
+  .drive-table th:nth-child(4), .drive-table td:nth-child(4) { white-space: normal; }
+}
