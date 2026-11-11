@@ -127,8 +127,10 @@ async function googleWeather(lat, lon) {
   const r = await fetch(`https://weather.googleapis.com/v1/currentConditions:lookup?${qs}`, { signal: AbortSignal.timeout(8000) });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) {
-    const why = d.error?.status === 'PERMISSION_DENIED' ? 'Weather API not enabled on the Google key' : `Google ${r.status}`;
-    throw new Error(why);
+    // Google's own message says exactly what's wrong (API off, key restriction, billing…).
+    const msg = String(d.error?.message || '').replace(/\s+/g, ' ').slice(0, 200);
+    const hint = d.error?.status === 'PERMISSION_DENIED' ? 'Weather API not allowed on the Google key' : `Google ${r.status}`;
+    throw new Error(msg ? `${hint}: ${msg}` : hint);
   }
   return {
     time: d.currentTime,

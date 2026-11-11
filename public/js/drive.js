@@ -134,7 +134,7 @@ const Drive = (() => {
     if (_wx.error) return `<div class="drive-problem">⚠️ Weather check failed (${escHtml(_wx.error)}) <button type="button" class="btn btn-ghost btn-sm" onclick="Drive.loadWx()">Retry</button></div>`;
     const st = _wx.station;
     const gNote = _wx.googleError
-      ? `<div class="drive-panel-note">Google Weather: ${escHtml(_wx.googleError)}${/not enabled/.test(_wx.googleError) ? ' — turn on “Weather API” in Google Cloud and allow it on your server key.' : ''}</div>` : '';
+      ? `<div class="drive-panel-note">Google Weather: ${escHtml(_wx.googleError)}${/not allowed/.test(_wx.googleError) ? ' — turn on “Weather API” in Google Cloud and allow it on your server key.' : ''}</div>` : '';
     return `
       <div class="drive-panel-note">${st
         ? `Measured at <strong>${escHtml(st.name)}</strong> (${escHtml(st.id)}), ${st.miles} mi away, ${st.ageMin} min ago ·
