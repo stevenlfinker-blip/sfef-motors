@@ -15,10 +15,12 @@ const PLACE = process.env.GARAGE_PLACE || 'North Miami';
 const TZ = 'America/New_York';
 const CACHE_MS = 15 * 60 * 1000;
 
-// Main roads near the garage for live traffic (Biscayne Blvd and I-95 at ~NE 125th St).
+// Main roads near the garage for live traffic, all at ~125th St. Positions
+// checked against Google Maps' traffic layer on 2026-11-11.
 const TRAFFIC_POINTS = [
-  { name: 'Biscayne Blvd', lat: 25.893, lon: -80.162 },
-  { name: 'I-95', lat: 25.893, lon: -80.203 },
+  { name: 'I-95', lat: 25.890, lon: -80.2095 },
+  { name: 'NE 125th St', lat: 25.890, lon: -80.189 },
+  { name: 'Biscayne Blvd', lat: 25.8905, lon: -80.1635 },
 ];
 
 let _cache = null; // { at, data }
@@ -106,11 +108,12 @@ function estimateTraffic(now) {
   }).formatToParts(now).map(p => [p.type, p.value]));
   const t = Number(parts.hour) + Number(parts.minute) / 60;
   const weekend = parts.weekday === 'Sat' || parts.weekday === 'Sun';
-  let level = 'good', value = 'Light';
-  if (!weekend && ((t >= 7 && t < 9) || (t >= 16.5 && t < 18.5))) { level = 'poor'; value = 'Rush hour'; }
-  else if (!weekend && ((t >= 6.5 && t < 9.75) || (t >= 15.5 && t < 19.25))) { level = 'fair'; value = 'Getting busy'; }
-  else if (weekend && t >= 11 && t < 19) { level = 'fair'; value = 'Weekend traffic'; }
-  return { key: 'traffic', label: 'Traffic', level, value, detail: 'Estimate from time of day', live: false };
+  // Checked against Google Maps live traffic: Miami daytime is rarely truly
+  // light, so anything between 6am and 8pm counts as at least moderate.
+  let level = 'good', value = 'Likely light';
+  if (!weekend && ((t >= 7 && t < 9) || (t >= 16.5 && t < 18.5))) { level = 'poor'; value = 'Likely rush hour'; }
+  else if (t >= 6 && t < 20) { level = 'fair'; value = 'Likely moderate'; }
+  return { key: 'traffic', label: 'Traffic', level, value, detail: 'Estimate by time of day — not live', live: false };
 }
 
 async function liveTraffic(key) {
@@ -119,10 +122,13 @@ async function liveTraffic(key) {
     const f = d.flowSegmentData;
     return { name: p.name, ratio: f.roadClosure ? 0 : f.currentSpeed / f.freeFlowSpeed, speed: f.currentSpeed };
   }));
+  // Average across the three roads; one jammed road makes it at least "fair".
+  const avg = segs.reduce((s, x) => s + x.ratio, 0) / segs.length;
   const slowest = segs.reduce((a, b) => (b.ratio < a.ratio ? b : a));
-  const level = slowest.ratio >= 0.8 ? 'good' : slowest.ratio >= 0.55 ? 'fair' : 'poor';
+  let level = avg >= 0.8 ? 'good' : avg >= 0.55 ? 'fair' : 'poor';
+  if (level === 'good' && slowest.ratio < 0.5) level = 'fair';
   const value = level === 'good' ? 'Flowing' : level === 'fair' ? 'Slow' : 'Heavy';
-  const detail = segs.map(s => `${s.name} ${Math.round(s.speed)} mph`).join(' · ');
+  const detail = segs.map(s => `${s.name} ${Math.round(s.speed)} mph`).join(' · ') + ' · TomTom';
   return { key: 'traffic', label: 'Traffic', level, value, detail, live: true };
 }
 
