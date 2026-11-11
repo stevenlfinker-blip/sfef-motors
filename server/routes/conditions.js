@@ -143,7 +143,11 @@ async function build() {
       'User-Agent': 'SFEF-Motors garage dashboard', Accept: 'application/geo+json',
     }).catch(() => null), // alerts are a bonus; never fail the whole card
     process.env.TOMTOM_API_KEY
-      ? liveTraffic(process.env.TOMTOM_API_KEY).catch(() => estimateTraffic(new Date()))
+      ? liveTraffic(process.env.TOMTOM_API_KEY.trim()).catch(e => {
+          console.error('[conditions] TomTom failed:', e.message);
+          const est = estimateTraffic(new Date());
+          return { ...est, detail: `Live traffic failed (${e.message}) — showing estimate` };
+        })
       : estimateTraffic(new Date()),
   ]);
   const alerts = (nws?.features || []).map(f => ({ event: f.properties.event, headline: f.properties.headline }));
