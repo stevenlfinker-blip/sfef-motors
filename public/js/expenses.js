@@ -10,11 +10,17 @@ const Expenses = (() => {
   // back to a muted neutral rather than repeating a hue.
   const CATEGORY_COLORS = ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'];
 
+  // Non-car buckets besides plain "Garage". Keep in sync with
+  // GARAGE_CATEGORIES in server/routes/expenses.js. In the category dropdown
+  // they use the value "gc:<name>" so they can't collide with a car id.
+  const GARAGE_CATEGORIES = ['Garage Improvements'];
+  const GC_PREFIX = 'gc:';
+
   function _categoryOrder() {
     // carLabelRaw (not carLabel) — e.category from the server is unescaped
     // text, so comparisons/dedup here must use the same raw form or a car
     // name with &, <, >, or " would show up as two separate categories.
-    const order = ['Garage', ..._cars.slice().sort((a, b) => a.id - b.id).map(carLabelRaw)];
+    const order = ['Garage', ...GARAGE_CATEGORIES, ..._cars.slice().sort((a, b) => a.id - b.id).map(carLabelRaw)];
     const seen = new Set(order);
     for (const e of _items) {
       const cat = e.category || 'Garage';
@@ -31,6 +37,7 @@ const Expenses = (() => {
   function _categoryToCarId(cat) {
     if (!cat) return undefined;
     if (cat === 'Garage') return null;
+    if (GARAGE_CATEGORIES.includes(cat)) return GC_PREFIX + cat;
     const car = _cars.find(c => carLabelRaw(c) === cat);
     return car ? car.id : undefined;
   }
@@ -195,7 +202,9 @@ const Expenses = (() => {
       ? `<option value="__archived__" selected>${escHtml(archivedLabel)} (sold)</option>`
       : '';
     const garageSelected = !selectedCarId && !archivedLabel;
-    return `${archivedOpt}<option value="" ${garageSelected ? 'selected' : ''}>Garage</option>${opts}`;
+    const gcOpts = GARAGE_CATEGORIES.map(g =>
+      `<option value="${escHtml(GC_PREFIX + g)}" ${selectedCarId === GC_PREFIX + g ? 'selected' : ''}>${escHtml(g)}</option>`).join('');
+    return `${archivedOpt}<option value="" ${garageSelected ? 'selected' : ''}>Garage</option>${gcOpts}${opts}`;
   }
 
   function _receiptPreviewHtml(receiptPath) {
@@ -240,7 +249,7 @@ const Expenses = (() => {
       </div>
       <div class="form-row">
         <label>Category</label>
-        <select id="f-car">${_categoryOptsHtml(e.car_id, e.archived ? e.category : null)}</select>
+        <select id="f-car">${_categoryOptsHtml(e.car_id || (e.garage_category ? GC_PREFIX + e.garage_category : e.car_id), e.archived ? e.category : null)}</select>
       </div>
       <div class="form-row">
         <label>Receipt / Invoice</label>
@@ -383,7 +392,7 @@ const Expenses = (() => {
       fd.append('vendor', document.getElementById(`sf-vendor-${item.id}`).value.trim());
       fd.append('amount', document.getElementById(`sf-amount-${item.id}`).value);
       fd.append('date', document.getElementById(`sf-date-${item.id}`).value);
-      fd.append('car_id', document.getElementById(`sf-car-${item.id}`).value || '');
+      _appendCategory(fd, document.getElementById(`sf-car-${item.id}`).value);
       fd.append('notes', document.getElementById(`sf-notes-${item.id}`).value.trim());
       fd.append('receipt', item.file);
       try {
@@ -412,19 +421,27 @@ const Expenses = (() => {
     if (flag) flag.value = '1';
   }
 
+  // Turns a category dropdown value into the form fields the server expects:
+  // a car id, a garage bucket ("gc:<name>"), the archived car, or plain Garage.
+  function _appendCategory(fd, val) {
+    if (val === '__archived__') {
+      fd.append('car_id', '');
+      fd.append('keep_category', '1');
+    } else if (val && val.startsWith(GC_PREFIX)) {
+      fd.append('car_id', '');
+      fd.append('garage_category', val.slice(GC_PREFIX.length));
+    } else {
+      fd.append('car_id', val || '');
+    }
+  }
+
   function collectFormData() {
     const fd = new FormData();
     fd.append('description', document.getElementById('f-desc').value.trim());
     fd.append('vendor', document.getElementById('f-vendor').value.trim());
     fd.append('amount', document.getElementById('f-amount').value);
     fd.append('date', document.getElementById('f-date').value);
-    const carVal = document.getElementById('f-car').value;
-    if (carVal === '__archived__') {
-      fd.append('car_id', '');
-      fd.append('keep_category', '1');
-    } else {
-      fd.append('car_id', carVal || '');
-    }
+    _appendCategory(fd, document.getElementById('f-car').value);
     fd.append('notes', document.getElementById('f-notes').value.trim());
     const removeFlag = document.getElementById('f-remove-receipt');
     if (removeFlag) fd.append('remove_receipt', removeFlag.value);

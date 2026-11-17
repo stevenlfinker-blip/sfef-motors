@@ -26,6 +26,11 @@ try { db.exec("ALTER TABLE expenses ADD COLUMN expense_type TEXT DEFAULT ''"); }
 // name, written when the car is deleted, so its past expenses keep showing
 // under that car's category (archived) instead of collapsing into Garage.
 try { db.exec("ALTER TABLE expenses ADD COLUMN car_label TEXT DEFAULT ''"); } catch (e) { /* already exists */ }
+// One-time migration: add garage_category column to expenses — which non-car
+// bucket an expense with no car belongs to ('' = plain Garage, or e.g.
+// 'Garage Improvements'). Kept separate from the legacy category column,
+// which still holds old imported labels that are never displayed.
+try { db.exec("ALTER TABLE expenses ADD COLUMN garage_category TEXT DEFAULT ''"); } catch (e) { /* already exists */ }
 // One-time migration: add category column to cars, and backfill known
 // categories for pre-existing rows. Both run only when the column is
 // actually being added — never again — so later manual edits to a car's

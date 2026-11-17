@@ -53,11 +53,21 @@ const upload = multer({
   },
 });
 
+// Non-car expense buckets. '' means plain "Garage"; anything else must be in
+// this list (the client sends it as garage_category). Keep in sync with
+// GARAGE_CATEGORIES in public/js/expenses.js.
+const GARAGE_CATEGORIES = ['Garage Improvements'];
+function cleanGarageCategory(v) {
+  return GARAGE_CATEGORIES.includes(v) ? v : '';
+}
+
 const SELECT = `
   SELECT ex.id, ex.car_id, ex.vendor, ex.description, ex.amount, ex.date, ex.receipt_path, ex.notes,
+         ex.garage_category,
          CASE
            WHEN c.id IS NOT NULL THEN c.make || ' ' || c.model || ' ' || c.year
            WHEN ex.car_label != '' THEN ex.car_label
+           WHEN ex.garage_category != '' THEN ex.garage_category
            ELSE 'Garage'
          END AS category,
          CASE WHEN c.id IS NULL AND ex.car_label != '' THEN 1 ELSE 0 END AS archived
@@ -117,9 +127,11 @@ router.post('/parse-receipt', parseUpload.single('receipt'), async (req, res) =>
 router.post('/', upload.single('receipt'), (req, res) => {
   const { car_id, vendor, description, amount, date, notes } = req.body;
   const receipt_path = req.file ? `/uploads/${req.file.filename}` : '';
+  // A garage bucket only applies when the expense isn't tied to a car.
+  const garage_category = car_id ? '' : cleanGarageCategory(req.body.garage_category);
   const result = db.prepare(
-    'INSERT INTO expenses (car_id, vendor, description, amount, date, receipt_path, notes) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(car_id||null, vendor||'', description, parseFloat(amount)||0, date||null, receipt_path, notes||'');
+    'INSERT INTO expenses (car_id, vendor, description, amount, date, receipt_path, notes, garage_category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(car_id||null, vendor||'', description, parseFloat(amount)||0, date||null, receipt_path, notes||'', garage_category);
   res.status(201).json(db.prepare(SELECT + 'WHERE ex.id = ?').get(result.lastInsertRowid));
 });
 
@@ -148,9 +160,10 @@ router.put('/:id', upload.single('receipt'), (req, res) => {
   // replace it — else re-picking "Garage" on an archived row would silently
   // keep showing the deleted car's name.
   const car_label = keep_category === '1' ? existing.car_label : '';
+  const garage_category = (car_id || car_label) ? '' : cleanGarageCategory(req.body.garage_category);
   db.prepare(
-    'UPDATE expenses SET car_id=?, car_label=?, vendor=?, description=?, amount=?, date=?, receipt_path=?, notes=? WHERE id=?'
-  ).run(car_id||null, car_label, vendor||'', description, parseFloat(amount)||0, date||null, receipt_path, notes||'', req.params.id);
+    'UPDATE expenses SET car_id=?, car_label=?, garage_category=?, vendor=?, description=?, amount=?, date=?, receipt_path=?, notes=? WHERE id=?'
+  ).run(car_id||null, car_label, garage_category, vendor||'', description, parseFloat(amount)||0, date||null, receipt_path, notes||'', req.params.id);
   res.json(db.prepare(SELECT + 'WHERE ex.id = ?').get(req.params.id));
 });
 
