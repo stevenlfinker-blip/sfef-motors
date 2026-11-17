@@ -498,6 +498,8 @@ th.sortable:hover { color: var(--accent); }
 .expense-cat-card:hover { border-color: var(--border-light); background: var(--card); }
 .expense-cat-card.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .expense-cat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .8px; font-weight: 600; }
+.expense-group-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.2px; font-weight: 700; margin: 0 0 8px; }
+.expense-group-divider { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 4px; }
 .expense-cat-value { font-size: 18px; font-weight: 800; color: var(--text); margin-top: 2px; }
 
 /* ── Scrollbar global ── */

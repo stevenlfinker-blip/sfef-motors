@@ -15,6 +15,7 @@ const Expenses = (() => {
   // they use the value "gc:<name>" so they can't collide with a car id.
   const GARAGE_CATEGORIES = ['Garage Improvements'];
   const GC_PREFIX = 'gc:';
+  const isGarageCat = cat => cat === 'Garage' || GARAGE_CATEGORIES.includes(cat);
 
   function _categoryOrder() {
     // carLabelRaw (not carLabel) — e.category from the server is unescaped
@@ -65,8 +66,12 @@ const Expenses = (() => {
   function _populateFilters() {
     const catSel = document.getElementById('expenses-filter-cat');
     const cur = catSel.value;
+    const opt = c => `<option value="${escHtml(c)}" ${cur === c ? 'selected' : ''}>${escHtml(c)}</option>`;
+    const order = _categoryOrder();
+    const carCats = order.filter(c => !isGarageCat(c));
     catSel.innerHTML = '<option value="">All Categories</option>' +
-      _categoryOrder().map(c => `<option value="${escHtml(c)}" ${cur === c ? 'selected' : ''}>${escHtml(c)}</option>`).join('');
+      `<optgroup label="Garage">${order.filter(isGarageCat).map(opt).join('')}</optgroup>` +
+      (carCats.length ? `<optgroup label="Cars">${carCats.map(opt).join('')}</optgroup>` : '');
   }
 
   function renderSummary() {
@@ -79,7 +84,7 @@ const Expenses = (() => {
     const activeCat = document.getElementById('expenses-filter-cat').value;
     const colorMap = _categoryColorMap();
 
-    const cards = _categoryOrder().map(cat => {
+    const cardHtml = cat => {
       const amt = byCat[cat] || 0;
       const pct = total > 0 ? Math.round((amt / total) * 100) : 0;
       const color = colorMap[cat];
@@ -89,17 +94,25 @@ const Expenses = (() => {
           <div class="expense-cat-value" style="color:${color}">${fmt$(amt)}</div>
           <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${pct}% of total</div>
         </div>`;
-    }).join('');
+    };
+    const order = _categoryOrder();
+    const garageCards = order.filter(isGarageCat).map(cardHtml).join('');
+    const carCards = order.filter(c => !isGarageCat(c)).map(cardHtml).join('');
 
+    // Two labeled groups: the garage itself (total + non-car buckets) and
+    // the cars, so the garage spending reads separately from per-car costs.
     document.getElementById('expense-summary-row').innerHTML = `
+      <div class="expense-group-label">Garage</div>
       <div class="expense-summary">
         <div class="expense-cat-card${activeCat === '' ? ' active' : ''}" data-cat="" style="border-left:2px solid var(--accent)">
           <div class="expense-cat-label">Total Spend</div>
           <div class="expense-cat-value" style="color:var(--accent)">${fmt$(total)}</div>
           <div style="font-size:10px;color:var(--text-muted);margin-top:2px">${_items.length} entries</div>
         </div>
-        ${cards}
-      </div>`;
+        ${garageCards}
+      </div>
+      ${carCards ? `<div class="expense-group-label expense-group-divider">Cars</div>
+      <div class="expense-summary">${carCards}</div>` : ''}`;
 
     document.querySelectorAll('#expense-summary-row .expense-cat-card').forEach(el => {
       el.addEventListener('click', () => {
@@ -204,7 +217,8 @@ const Expenses = (() => {
     const garageSelected = !selectedCarId && !archivedLabel;
     const gcOpts = GARAGE_CATEGORIES.map(g =>
       `<option value="${escHtml(GC_PREFIX + g)}" ${selectedCarId === GC_PREFIX + g ? 'selected' : ''}>${escHtml(g)}</option>`).join('');
-    return `${archivedOpt}<option value="" ${garageSelected ? 'selected' : ''}>Garage</option>${gcOpts}${opts}`;
+    return `<optgroup label="Garage"><option value="" ${garageSelected ? 'selected' : ''}>Garage</option>${gcOpts}</optgroup>` +
+      `<optgroup label="Cars">${archivedOpt}${opts}</optgroup>`;
   }
 
   function _receiptPreviewHtml(receiptPath) {
